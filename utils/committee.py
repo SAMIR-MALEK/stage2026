@@ -359,6 +359,19 @@ def _detail(row):
     except Exception:
         pass
 
+    # عرض روابط الوثائق على Drive
+    drive_raw = row.get("روابط_الوثائق", row.get("drive_links", "{}")) or "{}"
+    try:
+        drive_links = json.loads(drive_raw) if isinstance(drive_raw, str) else drive_raw
+        if drive_links:
+            st.markdown('<div class="card"><div class="card-title">📎 وثائق المترشح على Google Drive</div>',
+                        unsafe_allow_html=True)
+            for doc_name, link in drive_links.items():
+                st.markdown(f"• [{doc_name}]({link})")
+            st.markdown('</div>', unsafe_allow_html=True)
+    except Exception:
+        pass
+
 
 def _item_pts_badge(pts):
     col = "#e74c3c" if float(pts) < 0 else "#1a3a5c"

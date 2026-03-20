@@ -52,9 +52,8 @@ def _score_line(label, pts, max_pts=None, neg=False):
                 unsafe_allow_html=True)
 
 def _upload(label, key, required=True):
-    tag = ' <span style="color:#e74c3c;font-size:.8rem;">*إلزامي</span>' if required \
-          else ' <span style="color:#6b7f96;font-size:.8rem;">(اختياري)</span>'
-    f = st.file_uploader(f"📎 {label}{tag}",
+    req_marker = " *" if required else " (اختياري)"
+    f = st.file_uploader(f"📎 {label}{req_marker}",
                          type=["pdf","jpg","jpeg","png"], key=key)
     if f:
         st.markdown(f'<div style="font-size:.78rem;color:#1a7a4a;margin-top:-6px;">✅ {f.name}</div>',
@@ -116,9 +115,9 @@ def show_form():
     # ③ الاستفادات السابقة — مسقَّف
     # ──────────────────────────────────────────────
     _sec("③", "الاستفادات السابقة",
-         "الصيغة: <strong>n − 3</strong> (n = عدد الاستفادات السابقة). قد تكون سالبة.")
+         "يُخصم 5 نقاط لكل استفادة سابقة في آخر 6 سنوات (n = عدد الاستفادات السابقة). قد تكون سالبة.")
     prev_n    = st.number_input("عدد الاستفادات السابقة (n)", 0, 15, 0, key="tr_prev")
-    prev_pts  = float(prev_n - 3)
+    prev_pts = float(prev_n * -5)
     _score_line("نقاط / خصم الاستفادات", prev_pts, neg=(prev_pts < 0))
     st.markdown('</div>', unsafe_allow_html=True)
     scores["الاستفادات السابقة"] = prev_pts
