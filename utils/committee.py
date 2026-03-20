@@ -359,18 +359,37 @@ def _detail(row):
     except Exception:
         pass
 
-    # عرض روابط الوثائق على Drive
-    drive_raw = row.get("روابط_الوثائق", row.get("drive_links", "{}")) or "{}"
-    try:
-        drive_links = json.loads(drive_raw) if isinstance(drive_raw, str) else drive_raw
-        if drive_links:
-            st.markdown('<div class="card"><div class="card-title">📎 وثائق المترشح على Google Drive</div>',
+    # عرض وثائق المترشح مع زر تحميل مباشر
+    username = row.get("اسم_المستخدم","")
+    if username:
+        try:
+            from utils.drive import get_candidate_docs
+            import base64
+            docs = get_candidate_docs(username)
+            if docs:
+                st.markdown('<div class="card"><div class="card-title">📎 وثائق المترشح</div>',
+                            unsafe_allow_html=True)
+                for doc in docs:
+                    if doc.get("content_b64"):
+                        file_bytes = base64.b64decode(doc["content_b64"])
+                        col1, col2 = st.columns([3,1])
+                        with col1:
+                            st.markdown(f"📄 **{doc['name']}** — {doc['filename']} ({doc['size_kb']} KB)")
+                        with col2:
+                            st.download_button(
+                                "⬇️ تحميل",
+                                data=file_bytes,
+                                file_name=doc["filename"],
+                                mime=doc["mime"],
+                                key=f"dl_{username}_{doc['name']}"
+                            )
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لا توجد وثائق مرفوعة لهذا المترشح.</div>',
+                            unsafe_allow_html=True)
+        except Exception as e:
+            st.markdown(f'<div class="alert al-wn" style="font-size:.82rem;">⚠️ تعذر تحميل الوثائق: {e}</div>',
                         unsafe_allow_html=True)
-            for doc_name, link in drive_links.items():
-                st.markdown(f"• [{doc_name}]({link})")
-            st.markdown('</div>', unsafe_allow_html=True)
-    except Exception:
-        pass
 
 
 def _item_pts_badge(pts):

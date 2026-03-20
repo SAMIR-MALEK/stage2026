@@ -117,4 +117,59 @@ def _handle(u: str, p: str):
     st.session_state.years     = user.get("years", 0)
     st.session_state.position  = user.get("position", "")
     st.session_state.scale     = user.get("scale", "")
+    # تحقق إذا قدّم المترشح مسبقاً
+    _check_previous_submission(u, user["role"])
     st.rerun()
+
+
+def _check_previous_submission(username: str, role: str):
+    """تحقق من الشيت أو الملفات المحلية إذا قدّم المترشح مسبقاً"""
+    if role != "employee":
+        return
+    try:
+        from utils.sheets import get_all_records
+        records = get_all_records()
+        for r in records:
+            if str(r.get("اسم_المستخدم","")).strip() == username:
+                scale = str(r.get("السلم","")).strip()
+                key_map = {
+                    "الموظفون الإداريون والتقنيون":              "submitted_admin",
+                    "تربص تحسين المستوى":                        "submitted_training",
+                    "الإقامة العلمية قصيرة المدى":               "submitted_scientific",
+                    "التربصات قصيرة المدى للباحثين الدائمين":   "submitted_researcher",
+                }
+                key = key_map.get(scale)
+                if key:
+                    st.session_state[key] = True
+                    import json
+                    st.session_state["submitted_data"] = {
+                        "total_score": r.get("النقاط_الإجمالية", 0),
+                        "breakdown":   r.get("تفصيل_النقاط", "{}"),
+                        "drive_links": r.get("روابط_الوثائق", "{}"),
+                    }
+                return
+    except Exception:
+        pass
+    # تحقق محلي
+    from pathlib import Path
+    import json
+    sub_dir = Path("data/submissions")
+    if sub_dir.exists():
+        for f in sub_dir.glob(f"{username}_*.json"):
+            try:
+                with open(f, encoding="utf-8") as fp:
+                    d = json.load(fp)
+                scale = d.get("scale","")
+                key_map = {
+                    "الموظفون الإداريون والتقنيون":              "submitted_admin",
+                    "تربص تحسين المستوى":                        "submitted_training",
+                    "الإقامة العلمية قصيرة المدى":               "submitted_scientific",
+                    "التربصات قصيرة المدى للباحثين الدائمين":   "submitted_researcher",
+                }
+                key = key_map.get(scale)
+                if key:
+                    st.session_state[key] = True
+                    st.session_state["submitted_data"] = d
+                return
+            except Exception:
+                pass
