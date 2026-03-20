@@ -359,36 +359,28 @@ def _detail(row):
     except Exception:
         pass
 
-    # عرض وثائق المترشح مع زر تحميل مباشر
+    # عرض وثائق المترشح من Drive
     username = row.get("اسم_المستخدم","")
     if username:
         try:
             from utils.drive import get_candidate_docs
-            import base64
             docs = get_candidate_docs(username)
             if docs:
-                st.markdown('<div class="card"><div class="card-title">📎 وثائق المترشح</div>',
+                st.markdown('<div class="card"><div class="card-title">📎 وثائق المترشح على Drive</div>',
                             unsafe_allow_html=True)
                 for doc in docs:
-                    if doc.get("content_b64"):
-                        file_bytes = base64.b64decode(doc["content_b64"])
-                        col1, col2 = st.columns([3,1])
-                        with col1:
-                            st.markdown(f"📄 **{doc['name']}** — {doc['filename']} ({doc['size_kb']} KB)")
-                        with col2:
-                            st.download_button(
-                                "⬇️ تحميل",
-                                data=file_bytes,
-                                file_name=doc["filename"],
-                                mime=doc["mime"],
-                                key=f"dl_{username}_{doc['name']}"
-                            )
+                    c1, c2 = st.columns([4,1])
+                    with c1:
+                        st.markdown(f"📄 {doc['name']} ({doc['size_kb']} KB)")
+                    with c2:
+                        if doc.get("link"):
+                            st.markdown(f"[🔗 فتح]({doc['link']})")
                 st.markdown('</div>', unsafe_allow_html=True)
             else:
-                st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لا توجد وثائق مرفوعة لهذا المترشح.</div>',
+                st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لا توجد وثائق بعد.</div>',
                             unsafe_allow_html=True)
         except Exception as e:
-            st.markdown(f'<div class="alert al-wn" style="font-size:.82rem;">⚠️ تعذر تحميل الوثائق: {e}</div>',
+            st.markdown(f'<div class="alert al-wn" style="font-size:.82rem;">⚠️ {e}</div>',
                         unsafe_allow_html=True)
 
 

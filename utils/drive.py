@@ -1,9 +1,19 @@
 """
-حفظ الوثائق في Google Sheets كـ base64
-يستخدم نفس client من sheets.py
+Google Drive — Shared Drive
+يرفع الملفات في Shared Drive BJB2026
 """
-import base64
+import io
 import streamlit as st
+
+try:
+    from google.oauth2.service_account import Credentials
+    from googleapiclient.discovery import build
+    from googleapiclient.http import MediaIoBaseUpload
+    DRIVE_OK = True
+except ImportError:
+    DRIVE_OK = False
+
+SCOPES = ["https://www.googleapis.com/auth/drive"]
 
 
 def _log(msg):
@@ -12,36 +22,60 @@ def _log(msg):
     st.session_state.drive_logs.append(msg)
 
 
-def _get_docs_sheet():
-    """الحصول على ورقة الوثائق من نفس Spreadsheet"""
+def _get_service():
+    if not DRIVE_OK:
+        _log("❌ مكتبات Google غير مثبتة")
+        return None
     try:
-        from utils.sheets import _get_client, SHEET_NAME
-        client = _get_client()
-        if not client:
-            _log("❌ client فارغ")
-            return None
-        sh = client.open(SHEET_NAME)
-        try:
-            ws = sh.worksheet("الوثائق")
-            _log("✅ ورقة الوثائق موجودة")
-            return ws
-        except Exception:
-            _log("📋 إنشاء ورقة الوثائق...")
-            ws = sh.add_worksheet(title="الوثائق", rows=2000, cols=6)
-            ws.append_row(["اسم_المستخدم","اسم_الوثيقة","اسم_الملف","نوع_الملف","الحجم_KB","base64"])
-            ws.format("A1:F1", {
-                "backgroundColor": {"red":0.1,"green":0.23,"blue":0.36},
-                "textFormat": {"bold":True,"foregroundColor":{"red":1,"green":1,"blue":1}},
-            })
-            _log("✅ ورقة الوثائق أُنشئت")
-            return ws
+        creds_info = {k: str(st.secrets["google_credentials"][k]) for k in [
+            "type","project_id","private_key_id","private_key","client_email",
+            "client_id","auth_uri","token_uri",
+            "auth_provider_x509_cert_url","client_x509_cert_url"
+        ]}
+        creds   = Credentials.from_service_account_info(creds_info, scopes=SCOPES)
+        service = build("drive", "v3", credentials=creds)
+        _log("✅ اتصال Drive ناجح")
+        return service
     except Exception as e:
-        _log(f"❌ خطأ في الاتصال بـ Sheets: {type(e).__name__}: {e}")
+        _log(f"❌ خطأ اتصال: {e}")
+        return None
+
+
+def _get_or_create_folder(service, name: str, parent_id: str) -> str | None:
+    try:
+        q = (f"name='{name}' and mimeType='application/vnd.google-apps.folder' "
+             f"and trashed=false and '{parent_id}' in parents")
+        res = service.files().list(
+            q=q,
+            fields="files(id,name)",
+            supportsAllDrives=True,
+            includeItemsFromAllDrives=True,
+            corpora="drive",
+            driveId=st.secrets["drive_folder_id"],
+        ).execute()
+        files = res.get("files", [])
+        if files:
+            _log(f"📁 مجلد موجود: {name}")
+            return files[0]["id"]
+        meta = {
+            "name":     name,
+            "mimeType": "application/vnd.google-apps.folder",
+            "parents":  [parent_id],
+        }
+        folder = service.files().create(
+            body=meta,
+            fields="id",
+            supportsAllDrives=True,
+        ).execute()
+        fid = folder.get("id")
+        _log(f"📁 مجلد جديد: {name} — {fid}")
+        return fid
+    except Exception as e:
+        _log(f"❌ خطأ مجلد {name}: {e}")
         return None
 
 
 def upload_all_from_session(username: str) -> dict:
-    """حفظ كل ملفات session_state في شيت الوثائق"""
     files = [
         (k, v) for k, v in st.session_state.items()
         if k.startswith("file_") and isinstance(v, dict) and v.get("content")
@@ -52,70 +86,102 @@ def upload_all_from_session(username: str) -> dict:
         _log("⚠️ لا توجد ملفات")
         return {}
 
-    ws = _get_docs_sheet()
-    if not ws:
-        _log("❌ تعذر الوصول لورقة الوثائق")
-        return _save_locally(username, files)
+    service = _get_service()
+    if not service:
+        return {}
+
+    try:
+        root_id = str(st.secrets["drive_folder_id"]).strip()
+        _log(f"📂 Shared Drive ID: {root_id}")
+    except Exception:
+        _log("❌ drive_folder_id غير موجود في Secrets")
+        return {}
+
+    # مجلد المترشح داخل Shared Drive
+    user_folder_id = _get_or_create_folder(service, username, root_id)
+    if not user_folder_id:
+        return {}
 
     saved = {}
     for key, val in files:
         try:
             doc_name = key.replace("file_", "")
             content  = val["content"]
-            b64      = base64.b64encode(content).decode("utf-8")
-            size_kb  = len(content) // 1024
+            ext      = val["name"].rsplit(".", 1)[-1] if "." in val["name"] else "pdf"
+            filename = f"{username}_{doc_name}.{ext}"
+            mime     = val.get("mime", "application/pdf")
 
-            ws.append_row([
-                username,
-                doc_name,
-                val["name"],
-                val.get("mime", "application/pdf"),
-                size_kb,
-                b64,
-            ])
-            saved[doc_name] = f"✅ محفوظ ({size_kb} KB)"
-            _log(f"✅ حُفظ: {val['name']} ({size_kb} KB)")
+            _log(f"⬆️ رفع: {filename} ({len(content)//1024} KB)")
+
+            media = MediaIoBaseUpload(io.BytesIO(content), mimetype=mime, resumable=False)
+            meta  = {
+                "name":    filename,
+                "parents": [user_folder_id],
+            }
+            uploaded = service.files().create(
+                body=meta,
+                media_body=media,
+                fields="id,webViewLink",
+                supportsAllDrives=True,
+            ).execute()
+
+            link = uploaded.get("webViewLink", "")
+            saved[doc_name] = link
+            _log(f"✅ رُفع: {filename}")
+
+            # صلاحية القراءة
+            try:
+                service.permissions().create(
+                    fileId=uploaded["id"],
+                    body={"type": "anyone", "role": "reader"},
+                    supportsAllDrives=True,
+                ).execute()
+            except Exception:
+                pass
+
         except Exception as e:
-            _log(f"❌ خطأ في حفظ {val.get('name','?')}: {e}")
+            _log(f"❌ فشل {val.get('name','?')}: {e}")
 
     _log(f"📊 مرفوعة: {len(saved)}/{len(files)}")
     return saved
 
 
-def _save_locally(username: str, files: list) -> dict:
-    """حفظ احتياطي محلي"""
-    from pathlib import Path
-    saved = {}
-    docs_dir = Path(f"data/docs/{username}")
-    docs_dir.mkdir(parents=True, exist_ok=True)
-    for key, val in files:
-        doc_name = key.replace("file_", "")
-        ext = val["name"].rsplit(".", 1)[-1] if "." in val["name"] else "pdf"
-        fpath = docs_dir / f"{doc_name}.{ext}"
-        with open(fpath, "wb") as f:
-            f.write(val["content"])
-        saved[doc_name] = f"local:{fpath}"
-        _log(f"💾 حُفظ محلياً: {fpath}")
-    return saved
-
-
 def get_candidate_docs(username: str) -> list[dict]:
-    """استرجاع وثائق مترشح من شيت الوثائق"""
-    docs = []
+    """استرجاع وثائق مترشح من Drive"""
+    service = _get_service()
+    if not service:
+        return []
     try:
-        ws = _get_docs_sheet()
-        if not ws:
+        root_id = str(st.secrets["drive_folder_id"]).strip()
+        # البحث عن مجلد المترشح
+        q = (f"name='{username}' and mimeType='application/vnd.google-apps.folder' "
+             f"and trashed=false and '{root_id}' in parents")
+        res = service.files().list(
+            q=q, fields="files(id)",
+            supportsAllDrives=True, includeItemsFromAllDrives=True,
+            corpora="drive", driveId=root_id,
+        ).execute()
+        folders = res.get("files", [])
+        if not folders:
             return []
-        records = ws.get_all_records()
-        for r in records:
-            if str(r.get("اسم_المستخدم", "")).strip() == username:
-                docs.append({
-                    "name":        r.get("اسم_الوثيقة", ""),
-                    "filename":    r.get("اسم_الملف", ""),
-                    "mime":        r.get("نوع_الملف", "application/pdf"),
-                    "size_kb":     r.get("الحجم_KB", 0),
-                    "content_b64": r.get("base64", ""),
-                })
+        folder_id = folders[0]["id"]
+
+        # قائمة الملفات
+        res2 = service.files().list(
+            q=f"'{folder_id}' in parents and trashed=false",
+            fields="files(id,name,mimeType,webViewLink,size)",
+            supportsAllDrives=True, includeItemsFromAllDrives=True,
+        ).execute()
+        docs = []
+        for f in res2.get("files", []):
+            docs.append({
+                "name":     f.get("name",""),
+                "link":     f.get("webViewLink",""),
+                "mime":     f.get("mimeType",""),
+                "size_kb":  int(f.get("size",0)) // 1024,
+                "file_id":  f.get("id",""),
+            })
+        return docs
     except Exception as e:
-        _log(f"❌ خطأ في استرجاع الوثائق: {e}")
-    return docs
+        _log(f"❌ خطأ استرجاع: {e}")
+        return []
