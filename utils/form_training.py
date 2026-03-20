@@ -51,17 +51,27 @@ def _score_line(label, pts, max_pts=None, neg=False):
                 f'<span style="font-weight:700;color:{col};">{val}{mx} ن</span></div>',
                 unsafe_allow_html=True)
 
-def _upload(label, key, required=True):
-    req_marker = " *" if required else " (اختياري)"
-    f = st.file_uploader(f"📎 {label}{req_marker}",
-                         type=["pdf","jpg","jpeg","png"], key=key)
-    if f:
-        st.markdown(f'<div style="font-size:.78rem;color:#1a7a4a;margin-top:-6px;">✅ {f.name}</div>',
+
+def _smart_upload(label, session_key, required=True):
+    """رفع ملف ذكي — يحفظ المحتوى في session_state فور الرفع"""
+    marker = " *" if required else " (اختياري)"
+    f = st.file_uploader(f"📎 {label}{marker}",
+                         type=["pdf","jpg","jpeg","png"],
+                         key=f"uploader_{session_key}")
+    if f is not None:
+        st.session_state[f"file_{session_key}"] = {
+            "name": f.name, "content": f.read(), "type": f.type,
+        }
+    has_file = f"file_{session_key}" in st.session_state
+    if has_file:
+        fname = st.session_state[f"file_{session_key}"]["name"]
+        st.markdown(f'<div style="font-size:.78rem;color:#1a7a4a;margin-top:-6px;">✅ {fname}</div>',
                     unsafe_allow_html=True)
     elif required:
         st.markdown('<div style="font-size:.78rem;color:#e74c3c;margin-top:-6px;">⚠️ الوثيقة مطلوبة</div>',
                     unsafe_allow_html=True)
-    return f
+    return has_file
+
 
 def _add_btn(key):
     """زر إضافة عنصر جديد"""
@@ -76,6 +86,68 @@ def _del_btn(key):
 # ══════════════════════════════════════════════════
 # النموذج الرئيسي
 # ══════════════════════════════════════════════════
+def _upload_and_save(partial, breakdown, scale_name):
+    """حفظ مشترك لكل السلالم — يرفع الوثائق ثم يحفظ في Sheets"""
+    import io, json
+    from datetime import datetime
+    from pathlib import Path
+
+    with st.spinner("⏳ جارٍ رفع الوثائق وحفظ الملف..."):
+        drive_links = {}
+        try:
+            from utils.drive import upload_file
+            username = st.session_state.username
+            for key, val in st.session_state.items():
+                if key.startswith("file_") and isinstance(val, dict) and "content" in val:
+                    doc_name = key.replace("file_", "")
+                    ext = val["name"].rsplit(".", 1)[-1]
+                    link = upload_file(
+                        io.BytesIO(val["content"]),
+                        f"{username}_{doc_name}.{ext}",
+                        username,
+                        val["type"]
+                    )
+                    if link:
+                        drive_links[doc_name] = link
+        except Exception:
+            pass
+
+        data = {
+            "username":    st.session_state.username,
+            "name":        st.session_state.user_name,
+            "grade":       "مرفوعة — بانتظار اللجنة",
+            "position":    st.session_state.get("department","") or st.session_state.get("position",""),
+            "scale":       scale_name,
+            "total_score": partial,
+            "breakdown":   json.dumps(breakdown, ensure_ascii=False),
+            "drive_links": json.dumps(drive_links, ensure_ascii=False),
+            "status":      "قيد المراجعة",
+        }
+        saved = False
+        try:
+            from utils.sheets import save_application
+            saved = save_application(data)
+        except Exception:
+            pass
+        if not saved:
+            Path("data/submissions").mkdir(parents=True, exist_ok=True)
+            fname = f"data/submissions/{st.session_state.username}_{datetime.now().strftime('%Y%m%d_%H%M')}.json"
+            with open(fname,"w",encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+
+    st.balloons()
+    st.markdown(f"""
+    <div class="alert al-ok">
+      ✅ <strong>تم تقديم ملفك بنجاح!</strong><br>
+      مجموع نقاطك الجزئية: <strong>{partial:.1f} نقطة</strong><br>
+      وثائق مرفوعة على Drive: <strong>{len(drive_links)}</strong>
+    </div>
+    """, unsafe_allow_html=True)
+    if drive_links:
+        st.markdown("**روابط وثائقك:**")
+        for name, link in drive_links.items():
+            st.markdown(f"• [{name}]({link})")
+
 
 def show_form():
     _header()
@@ -93,7 +165,7 @@ def show_form():
     # ──────────────────────────────────────────────
     _sec("①", "الرتبة العلمية",
          "ارفع وثيقة <strong>آخر ترقية</strong> — اللجنة تحدد نقاطك (7 – 9 نقطة).")
-    rank_doc = _upload("وثيقة آخر ترقية في الرتبة", "rank_doc", required=True)
+    rank_doc = _smart_upload("وثيقة آخر ترقية في الرتبة", "rank_doc", required=True)
     st.markdown('<div class="alert al-wn" style="font-size:.85rem;">⏳ نقاط الرتبة تُضاف من اللجنة بعد مراجعة الوثيقة.</div>',
                 unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -105,7 +177,7 @@ def show_form():
     _sec("②", "التسجيل المنتظم",
          "2 نقطة لكل سنة تسجيل منتظم في الدكتوراه أو التأهيل.")
     reg_count = st.number_input("عدد سنوات التسجيل المنتظم", 0, 10, 0, key="tr_reg")
-    reg_doc   = _upload("وثيقة إثبات التسجيل", "reg_doc", required=reg_count > 0)
+    reg_doc   = _smart_upload("وثيقة إثبات التسجيل", "reg_doc", required=reg_count > 0)
     reg_pts   = reg_count * 2.0
     _score_line("نقاط التسجيل المنتظم", reg_pts)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -130,7 +202,7 @@ def show_form():
     award_ok  = st.checkbox("حصلت على جائزة وطنية أو دولية — 5 نقطة", key="tr_award")
     award_doc = None
     if award_ok:
-        award_doc = _upload("وثيقة الجائزة أو شهادة التكريم", "award_doc", required=True)
+        award_doc = _smart_upload("وثيقة الجائزة أو شهادة التكريم", "award_doc", required=True)
     award_pts = 5.0 if (award_ok and award_doc) else 0.0
     _score_line("نقاط الجوائز", award_pts, 5)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -197,9 +269,9 @@ def show_form():
             int_type = st.selectbox("نوع المداخلة", list(INTERV_PTS.keys()), key=f"int_type_{i}")
             st.date_input(f"تاريخ المداخلة", key=f"int_date_{i}")
         with c3:
-            cert = st.file_uploader(f"📎 شهادة {i+1} *",
+            # cert = st.file_uploader(f"📎 شهادة {i+1} *",
                                     type=["pdf","jpg","jpeg","png"], key=f"int_cert_{i}")
-            has  = cert is not None
+            # auto
             if has:   st.markdown('<div style="font-size:.75rem;color:#1a7a4a;">✅</div>', unsafe_allow_html=True)
             else:     st.markdown('<div style="font-size:.75rem;color:#e74c3c;">⚠️</div>', unsafe_allow_html=True)
             pts  = INTERV_PTS.get(int_type, 0) if has else 0
@@ -236,9 +308,9 @@ def show_form():
             st.text_input(f"رابط (اختياري)", key=f"pat_url_{i}",
                           placeholder="https://...")
         with c3:
-            cert = st.file_uploader(f"📎 شهادة {i+1} *",
+            # cert = st.file_uploader(f"📎 شهادة {i+1} *",
                                     type=["pdf","jpg","jpeg","png"], key=f"pat_cert_{i}")
-            has  = cert is not None
+            # auto
             if has:   st.markdown('<div style="font-size:.75rem;color:#1a7a4a;">✅</div>', unsafe_allow_html=True)
             else:     st.markdown('<div style="font-size:.75rem;color:#e74c3c;">⚠️</div>', unsafe_allow_html=True)
             pts  = 15 if has else 0
@@ -275,9 +347,9 @@ def show_form():
             ptype = st.selectbox("نوع المشروع", list(PROJECT_PTS.keys()), key=f"proj_type_{i}")
             st.date_input("تاريخ البداية", key=f"proj_date_{i}")
         with c3:
-            cert = st.file_uploader(f"📎 وثيقة {i+1} *",
+            # cert = st.file_uploader(f"📎 وثيقة {i+1} *",
                                     type=["pdf","jpg","jpeg","png"], key=f"proj_cert_{i}")
-            has  = cert is not None
+            # auto
             if has:   st.markdown('<div style="font-size:.75rem;color:#1a7a4a;">✅</div>', unsafe_allow_html=True)
             else:     st.markdown('<div style="font-size:.75rem;color:#e74c3c;">⚠️</div>', unsafe_allow_html=True)
             pts  = PROJECT_PTS.get(ptype, 0) if has else 0
@@ -313,9 +385,9 @@ def show_form():
             stype = st.selectbox("الصفة", list(SUPERV_PTS.keys()), key=f"sup_type_{i}")
             st.date_input("تاريخ المناقشة", key=f"sup_date_{i}")
         with c3:
-            cert = st.file_uploader(f"📎 محضر {i+1} *",
+            # cert = st.file_uploader(f"📎 محضر {i+1} *",
                                     type=["pdf","jpg","jpeg","png"], key=f"sup_cert_{i}")
-            has  = cert is not None
+            # auto
             if has:   st.markdown('<div style="font-size:.75rem;color:#1a7a4a;">✅</div>', unsafe_allow_html=True)
             else:     st.markdown('<div style="font-size:.75rem;color:#e74c3c;">⚠️</div>', unsafe_allow_html=True)
             if stype == "عضو لجنة مناقشة":
@@ -409,11 +481,11 @@ def show_form():
     decl = st.checkbox("أُقرّ بأن جميع المعلومات المُدرجة صحيحة وكاملة وأتحمل المسؤولية الكاملة.")
     if st.button("📤 تقديم الملف النهائي",
                  disabled=not (decl and rank_doc), use_container_width=True):
-        _submit(partial, scores)
+        _upload_and_save(partial, scores, "تربص تحسين المستوى")
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-def _submit(partial, scores):
+def _upload_and_save(partial, scores, "تربص تحسين المستوى"):
     data = {
         "username":     st.session_state.username,
         "name":         st.session_state.user_name,

@@ -49,17 +49,27 @@ def _score_line(label, pts, max_pts=None, neg=False):
                 f'<span style="font-weight:700;color:{col};">{val}{mx} ن</span></div>',
                 unsafe_allow_html=True)
 
-def _upload(label, key, required=True):
-    req_marker = " *" if required else " (اختياري)"
-    f = st.file_uploader(f"📎 {label}{req_marker}",
-                         type=["pdf","jpg","jpeg","png"], key=key)
-    if f:
-        st.markdown(f'<div style="font-size:.78rem;color:#1a7a4a;margin-top:-6px;">✅ {f.name}</div>',
+
+def _smart_upload(label, session_key, required=True):
+    """رفع ملف ذكي — يحفظ المحتوى في session_state فور الرفع"""
+    marker = " *" if required else " (اختياري)"
+    f = st.file_uploader(f"📎 {label}{marker}",
+                         type=["pdf","jpg","jpeg","png"],
+                         key=f"uploader_{session_key}")
+    if f is not None:
+        st.session_state[f"file_{session_key}"] = {
+            "name": f.name, "content": f.read(), "type": f.type,
+        }
+    has_file = f"file_{session_key}" in st.session_state
+    if has_file:
+        fname = st.session_state[f"file_{session_key}"]["name"]
+        st.markdown(f'<div style="font-size:.78rem;color:#1a7a4a;margin-top:-6px;">✅ {fname}</div>',
                     unsafe_allow_html=True)
     elif required:
         st.markdown('<div style="font-size:.78rem;color:#e74c3c;margin-top:-6px;">⚠️ الوثيقة مطلوبة</div>',
                     unsafe_allow_html=True)
-    return f
+    return has_file
+
 
 def _add_btn(key):
     _, c = st.columns([5,1])
@@ -89,7 +99,7 @@ def show_form():
     # ① الرتبة — اللجنة تحدد
     _sec("①", "الرتبة العلمية",
          "ارفع وثيقة <strong>آخر ترقية</strong> — اللجنة تحدد نقاطك (3–9 نقاط).")
-    rank_doc = _upload("وثيقة آخر ترقية في الرتبة", "sc_rank_doc", required=True)
+    rank_doc = _smart_upload("وثيقة آخر ترقية في الرتبة", "sc_rank_doc", required=True)
     st.markdown('<div class="alert al-wn" style="font-size:.85rem;">⏳ نقاط الرتبة تُضاف من اللجنة بعد مراجعة الوثيقة.</div>',
                 unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -107,7 +117,7 @@ def show_form():
     _sec("③", "جوائز دولية/وطنية مرتبطة بإنجازات علمية",
          "10 نقاط — وثيقة الجائزة إلزامية.")
     award_ok  = st.checkbox("حصلت على جائزة وطنية أو دولية — 10 نقطة", key="sc_award")
-    award_doc = _upload("وثيقة الجائزة أو شهادة التكريم", "sc_award_doc", required=award_ok) if award_ok else None
+    award_doc = _smart_upload("وثيقة الجائزة أو شهادة التكريم", "sc_award_doc", required=award_ok) if award_ok else None
     award_pts = 10.0 if (award_ok and award_doc) else 0.0
     _score_line("نقاط الجوائز", award_pts, 10)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -162,8 +172,8 @@ def show_form():
             int_type = st.selectbox("نوع المداخلة", list(INTERV_PTS.keys()), key=f"sc_int_type_{i}")
             st.date_input("تاريخ المداخلة", key=f"sc_int_date_{i}")
         with c3:
-            cert = st.file_uploader(f"📎 شهادة *", type=["pdf","jpg","jpeg","png"], key=f"sc_int_cert_{i}")
-            has  = cert is not None
+            # cert = st.file_uploader(f"📎 شهادة *", type=["pdf","jpg","jpeg","png"], key=f"sc_int_cert_{i}")
+            # auto
             st.markdown(f'<div style="font-size:.75rem;color:{"#1a7a4a" if has else "#e74c3c"};">{"✅" if has else "⚠️"}</div>',
                         unsafe_allow_html=True)
             pts  = INTERV_PTS.get(int_type, 0) if has else 0
@@ -193,8 +203,8 @@ def show_form():
             ptype = st.selectbox("نوع المشروع", list(PROJECT_PTS.keys()), key=f"sc_proj_type_{i}")
             st.date_input("تاريخ البداية", key=f"sc_proj_date_{i}")
         with c3:
-            cert = st.file_uploader(f"📎 وثيقة *", type=["pdf","jpg","jpeg","png"], key=f"sc_proj_cert_{i}")
-            has  = cert is not None
+            # cert = st.file_uploader(f"📎 وثيقة *", type=["pdf","jpg","jpeg","png"], key=f"sc_proj_cert_{i}")
+            # auto
             st.markdown(f'<div style="font-size:.75rem;color:{"#1a7a4a" if has else "#e74c3c"};">{"✅" if has else "⚠️"}</div>',
                         unsafe_allow_html=True)
             pts  = PROJECT_PTS.get(ptype, 0) if has else 0
@@ -224,8 +234,8 @@ def show_form():
             stype = st.selectbox("الصفة", list(SUPERV_PTS.keys()), key=f"sc_sup_type_{i}")
             st.date_input("تاريخ المناقشة", key=f"sc_sup_date_{i}")
         with c3:
-            cert = st.file_uploader(f"📎 محضر *", type=["pdf","jpg","jpeg","png"], key=f"sc_sup_cert_{i}")
-            has  = cert is not None
+            # cert = st.file_uploader(f"📎 محضر *", type=["pdf","jpg","jpeg","png"], key=f"sc_sup_cert_{i}")
+            # auto
             st.markdown(f'<div style="font-size:.75rem;color:{"#1a7a4a" if has else "#e74c3c"};">{"✅" if has else "⚠️"}</div>',
                         unsafe_allow_html=True)
             if stype == "عضو لجنة مناقشة":
@@ -261,8 +271,8 @@ def show_form():
             st.selectbox("نوع المؤسسة", ["مؤسسة ناشئة","مؤسسة مصغرة","براءة اختراع"], key=f"sc_law_type_{i}")
             st.date_input("تاريخ المناقشة", key=f"sc_law_date_{i}")
         with c3:
-            cert = st.file_uploader(f"📎 وثيقة *", type=["pdf","jpg","jpeg","png"], key=f"sc_law_cert_{i}")
-            has  = cert is not None
+            # cert = st.file_uploader(f"📎 وثيقة *", type=["pdf","jpg","jpeg","png"], key=f"sc_law_cert_{i}")
+            # auto
             st.markdown(f'<div style="font-size:.75rem;color:{"#1a7a4a" if has else "#e74c3c"};">{"✅" if has else "⚠️"}</div>',
                         unsafe_allow_html=True)
             pts = 2 if has else 0
@@ -292,8 +302,8 @@ def show_form():
             st.selectbox("نوع الوسم", ["وسم لابل Label","مشروع مبتكر","مؤسسة ناشئة"], key=f"sc_lbl_type_{i}")
             st.date_input("تاريخ الحصول على الوسم", key=f"sc_lbl_date_{i}")
         with c3:
-            cert = st.file_uploader(f"📎 وثيقة الوسم *", type=["pdf","jpg","jpeg","png"], key=f"sc_lbl_cert_{i}")
-            has  = cert is not None
+            # cert = st.file_uploader(f"📎 وثيقة الوسم *", type=["pdf","jpg","jpeg","png"], key=f"sc_lbl_cert_{i}")
+            # auto
             st.markdown(f'<div style="font-size:.75rem;color:{"#1a7a4a" if has else "#e74c3c"};">{"✅" if has else "⚠️"}</div>',
                         unsafe_allow_html=True)
             pts = 5 if has else 0
@@ -338,8 +348,8 @@ def show_form():
         with c2:
             st.date_input("تاريخ الدراسة", key=f"sc_natl_date_{i}")
         with c3:
-            cert = st.file_uploader(f"📎 تقرير *", type=["pdf","jpg","jpeg","png"], key=f"sc_natl_cert_{i}")
-            has  = cert is not None
+            # cert = st.file_uploader(f"📎 تقرير *", type=["pdf","jpg","jpeg","png"], key=f"sc_natl_cert_{i}")
+            # auto
             st.markdown(f'<div style="font-size:.75rem;color:{"#1a7a4a" if has else "#e74c3c"};">{"✅" if has else "⚠️"}</div>',
                         unsafe_allow_html=True)
             pts = 2 if has else 0
@@ -369,8 +379,8 @@ def show_form():
         with c2:
             st.date_input("تاريخ الدراسة", key=f"sc_intl_date_{i}")
         with c3:
-            cert = st.file_uploader(f"📎 تقرير *", type=["pdf","jpg","jpeg","png"], key=f"sc_intl_cert_{i}")
-            has  = cert is not None
+            # cert = st.file_uploader(f"📎 تقرير *", type=["pdf","jpg","jpeg","png"], key=f"sc_intl_cert_{i}")
+            # auto
             st.markdown(f'<div style="font-size:.75rem;color:{"#1a7a4a" if has else "#e74c3c"};">{"✅" if has else "⚠️"}</div>',
                         unsafe_allow_html=True)
             pts = 3 if has else 0
@@ -428,11 +438,11 @@ def show_form():
     decl = st.checkbox("أُقرّ بأن جميع المعلومات المُدرجة صحيحة وكاملة وأتحمل المسؤولية الكاملة.")
     if st.button("📤 تقديم الملف النهائي",
                  disabled=not (decl and rank_doc), use_container_width=True):
-        _submit(partial, scores)
+        _upload_and_save(partial, scores, "الإقامة العلمية قصيرة المدى")
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-def _submit(partial, scores):
+def _upload_and_save(partial, scores, "الإقامة العلمية قصيرة المدى"):
     data = {
         "username":    st.session_state.username,
         "name":        st.session_state.user_name,

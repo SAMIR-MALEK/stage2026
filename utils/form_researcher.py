@@ -47,17 +47,27 @@ def _score_line(label, pts, max_pts=None, neg=False):
                 f'<span style="font-weight:700;color:{col};">{val}{mx} ن</span></div>',
                 unsafe_allow_html=True)
 
-def _upload(label, key, required=True):
-    req_marker = " *" if required else " (اختياري)"
-    f = st.file_uploader(f"📎 {label}{req_marker}",
-                         type=["pdf","jpg","jpeg","png"], key=key)
-    if f:
-        st.markdown(f'<div style="font-size:.78rem;color:#1a7a4a;margin-top:-6px;">✅ {f.name}</div>',
+
+def _smart_upload(label, session_key, required=True):
+    """رفع ملف ذكي — يحفظ المحتوى في session_state فور الرفع"""
+    marker = " *" if required else " (اختياري)"
+    f = st.file_uploader(f"📎 {label}{marker}",
+                         type=["pdf","jpg","jpeg","png"],
+                         key=f"uploader_{session_key}")
+    if f is not None:
+        st.session_state[f"file_{session_key}"] = {
+            "name": f.name, "content": f.read(), "type": f.type,
+        }
+    has_file = f"file_{session_key}" in st.session_state
+    if has_file:
+        fname = st.session_state[f"file_{session_key}"]["name"]
+        st.markdown(f'<div style="font-size:.78rem;color:#1a7a4a;margin-top:-6px;">✅ {fname}</div>',
                     unsafe_allow_html=True)
     elif required:
         st.markdown('<div style="font-size:.78rem;color:#e74c3c;margin-top:-6px;">⚠️ الوثيقة مطلوبة</div>',
                     unsafe_allow_html=True)
-    return f
+    return has_file
+
 
 def _add_btn(key):
     _, c = st.columns([5,1])
@@ -92,7 +102,7 @@ def show_form():
         phd_pts   = phd_years * 2.0
         _score_line("نقاط التسجيل في الدكتوراه", phd_pts)
     with c2:
-        phd_doc = _upload("وثيقة التسجيل في الدكتوراه", "rs_phd_doc", required=True)
+        phd_doc = _smart_upload("وثيقة التسجيل في الدكتوراه", "rs_phd_doc", required=True)
     st.markdown('</div>', unsafe_allow_html=True)
     scores["① التسجيل في الدكتوراه"] = phd_pts if phd_doc else 0.0
 
@@ -108,7 +118,7 @@ def show_form():
     _sec("③", "مشروع مؤسسة ناشئة في الحاضنة الجامعية",
          "1 نقطة — شهادة تسجيل المشروع في الحاضنة إلزامية.")
     incub_ok  = st.checkbox("لديّ مشروع مسجّل في الحاضنة الجامعية — 1 نقطة", key="rs_incub")
-    incub_doc = _upload("شهادة تسجيل المشروع في الحاضنة", "rs_incub_doc", required=incub_ok) if incub_ok else None
+    incub_doc = _smart_upload("شهادة تسجيل المشروع في الحاضنة", "rs_incub_doc", required=incub_ok) if incub_ok else None
     incub_pts = 1.0 if (incub_ok and incub_doc) else 0.0
     _score_line("نقاط مشروع الحاضنة", incub_pts, 1)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -118,7 +128,7 @@ def show_form():
     _sec("④", "جوائز وطنية/دولية مرتبطة بإنجازات علمية",
          "5 نقاط — وثيقة الجائزة إلزامية.")
     award_ok  = st.checkbox("حصلت على جائزة وطنية أو دولية — 5 نقطة", key="rs_award")
-    award_doc = _upload("وثيقة الجائزة أو شهادة التكريم", "rs_award_doc", required=award_ok) if award_ok else None
+    award_doc = _smart_upload("وثيقة الجائزة أو شهادة التكريم", "rs_award_doc", required=award_ok) if award_ok else None
     award_pts = 5.0 if (award_ok and award_doc) else 0.0
     _score_line("نقاط الجوائز", award_pts, 5)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -173,8 +183,8 @@ def show_form():
             int_type = st.selectbox("نوع المداخلة", list(INTERV_PTS.keys()), key=f"rs_int_type_{i}")
             st.date_input("تاريخ المداخلة", key=f"rs_int_date_{i}")
         with c3:
-            cert = st.file_uploader(f"📎 شهادة *", type=["pdf","jpg","jpeg","png"], key=f"rs_int_cert_{i}")
-            has  = cert is not None
+            # cert = st.file_uploader(f"📎 شهادة *", type=["pdf","jpg","jpeg","png"], key=f"rs_int_cert_{i}")
+            # auto
             st.markdown(f'<div style="font-size:.75rem;color:{"#1a7a4a" if has else "#e74c3c"};">{"✅" if has else "⚠️"}</div>',
                         unsafe_allow_html=True)
             pts  = INTERV_PTS.get(int_type,0) if has else 0
@@ -204,8 +214,8 @@ def show_form():
             st.date_input("تاريخ الحصول", key=f"rs_pat_date_{i}")
             st.text_input(f"رابط (اختياري)", key=f"rs_pat_url_{i}", placeholder="https://...")
         with c3:
-            cert = st.file_uploader(f"📎 شهادة *", type=["pdf","jpg","jpeg","png"], key=f"rs_pat_cert_{i}")
-            has  = cert is not None
+            # cert = st.file_uploader(f"📎 شهادة *", type=["pdf","jpg","jpeg","png"], key=f"rs_pat_cert_{i}")
+            # auto
             st.markdown(f'<div style="font-size:.75rem;color:{"#1a7a4a" if has else "#e74c3c"};">{"✅" if has else "⚠️"}</div>',
                         unsafe_allow_html=True)
             pts  = 15 if has else 0
@@ -236,8 +246,8 @@ def show_form():
             ptype = st.selectbox("نوع المشروع", list(PROJECT_PTS.keys()), key=f"rs_proj_type_{i}")
             st.date_input("تاريخ البداية", key=f"rs_proj_date_{i}")
         with c3:
-            cert = st.file_uploader(f"📎 وثيقة *", type=["pdf","jpg","jpeg","png"], key=f"rs_proj_cert_{i}")
-            has  = cert is not None
+            # cert = st.file_uploader(f"📎 وثيقة *", type=["pdf","jpg","jpeg","png"], key=f"rs_proj_cert_{i}")
+            # auto
             st.markdown(f'<div style="font-size:.75rem;color:{"#1a7a4a" if has else "#e74c3c"};">{"✅" if has else "⚠️"}</div>',
                         unsafe_allow_html=True)
             pts  = PROJECT_PTS.get(ptype,0) if has else 0
@@ -265,8 +275,8 @@ def show_form():
         with c2:
             st.date_input("تاريخ الدراسة", key=f"rs_natl_date_{i}")
         with c3:
-            cert = st.file_uploader(f"📎 تقرير *", type=["pdf","jpg","jpeg","png"], key=f"rs_natl_cert_{i}")
-            has  = cert is not None
+            # cert = st.file_uploader(f"📎 تقرير *", type=["pdf","jpg","jpeg","png"], key=f"rs_natl_cert_{i}")
+            # auto
             st.markdown(f'<div style="font-size:.75rem;color:{"#1a7a4a" if has else "#e74c3c"};">{"✅" if has else "⚠️"}</div>',
                         unsafe_allow_html=True)
             pts  = 2 if has else 0
@@ -296,8 +306,8 @@ def show_form():
         with c2:
             st.date_input("تاريخ الدراسة", key=f"rs_intl_date_{i}")
         with c3:
-            cert = st.file_uploader(f"📎 تقرير *", type=["pdf","jpg","jpeg","png"], key=f"rs_intl_cert_{i}")
-            has  = cert is not None
+            # cert = st.file_uploader(f"📎 تقرير *", type=["pdf","jpg","jpeg","png"], key=f"rs_intl_cert_{i}")
+            # auto
             st.markdown(f'<div style="font-size:.75rem;color:{"#1a7a4a" if has else "#e74c3c"};">{"✅" if has else "⚠️"}</div>',
                         unsafe_allow_html=True)
             pts  = 3 if has else 0
@@ -346,11 +356,11 @@ def show_form():
     decl = st.checkbox("أُقرّ بأن جميع المعلومات المُدرجة صحيحة وكاملة وأتحمل المسؤولية الكاملة.")
     if st.button("📤 تقديم الملف النهائي",
                  disabled=not decl, use_container_width=True):
-        _submit(partial, scores)
+        _upload_and_save(partial, scores, "التربصات قصيرة المدى للباحثين الدائمين")
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-def _submit(partial, scores):
+def _upload_and_save(partial, scores, "التربصات قصيرة المدى للباحثين الدائمين"):
     data = {
         "username":    st.session_state.username,
         "name":        st.session_state.user_name,
