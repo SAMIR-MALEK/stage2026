@@ -90,12 +90,21 @@ def upload_all_from_session(username: str) -> dict:
     if not service:
         return {}
 
+    # نحاول قراءة drive_folder_id من مكانين محتملين
+    root_id = ""
     try:
         root_id = str(st.secrets["drive_folder_id"]).strip()
-        _log(f"📂 Shared Drive ID: {root_id}")
     except Exception:
-        _log("❌ drive_folder_id غير موجود في Secrets")
+        pass
+    if not root_id:
+        try:
+            root_id = str(st.secrets["google_credentials"]["drive_folder_id"]).strip()
+        except Exception:
+            pass
+    if not root_id:
+        _log("❌ drive_folder_id غير موجود — أضفه في Secrets خارج [google_credentials]")
         return {}
+    _log(f"📂 Shared Drive ID: {root_id}")
 
     # مجلد المترشح داخل Shared Drive
     user_folder_id = _get_or_create_folder(service, username, root_id)
