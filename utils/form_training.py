@@ -52,25 +52,29 @@ def _score_line(label, pts, max_pts=None, neg=False):
                 unsafe_allow_html=True)
 
 
-def _smart_upload(label, session_key, required=True):
-    """رفع ملف ذكي — يحفظ المحتوى في session_state فور الرفع"""
+
+def _smart_upload(label, skey, required=True):
     marker = " *" if required else " (اختياري)"
-    f = st.file_uploader(f"📎 {label}{marker}",
-                         type=["pdf","jpg","jpeg","png"],
-                         key=f"uploader_{session_key}")
-    if f is not None:
-        st.session_state[f"file_{session_key}"] = {
-            "name": f.name, "content": f.read(), "type": f.type,
+    uploaded = st.file_uploader(
+        f"📎 {label}{marker}",
+        type=["pdf","jpg","jpeg","png"],
+        key=f"uploader_{skey}"
+    )
+    if uploaded is not None:
+        st.session_state[f"file_{skey}"] = {
+            "name": uploaded.name, "content": uploaded.read(), "mime": uploaded.type,
         }
-    has_file = f"file_{session_key}" in st.session_state
-    if has_file:
-        fname = st.session_state[f"file_{session_key}"]["name"]
-        st.markdown(f'<div style="font-size:.78rem;color:#1a7a4a;margin-top:-6px;">✅ {fname}</div>',
-                    unsafe_allow_html=True)
+    has = f"file_{skey}" in st.session_state
+    if has:
+        st.markdown(
+            f'<div style="font-size:.78rem;color:#1a7a4a;margin-top:-6px;">' +
+            f'✅ {st.session_state[f"file_{skey}"]["name"]}</div>',
+            unsafe_allow_html=True)
     elif required:
-        st.markdown('<div style="font-size:.78rem;color:#e74c3c;margin-top:-6px;">⚠️ الوثيقة مطلوبة</div>',
-                    unsafe_allow_html=True)
-    return has_file
+        st.markdown(
+            '<div style="font-size:.78rem;color:#e74c3c;margin-top:-6px;">⚠️ الوثيقة مطلوبة</div>',
+            unsafe_allow_html=True)
+    return has
 
 
 def _add_btn(key):
@@ -148,9 +152,96 @@ def _upload_and_save(partial, breakdown, scale_name):
         for name, link in drive_links.items():
             st.markdown(f"• [{name}]({link})")
 
+def _do_submit(partial, scores, scale_name, submitted_key):
+    """دالة التقديم الموحدة لكل السلالم"""
+    import io, json
+    from datetime import datetime
+    from pathlib import Path
+
+    with st.spinner("⏳ جارٍ رفع الوثائق وحفظ الملف..."):
+        drive_links = {}
+        try:
+            from utils.drive import upload_file
+            username = st.session_state.username
+            for key, val in st.session_state.items():
+                if key.startswith("file_") and isinstance(val, dict) and "content" in val:
+                    doc_name = key.replace("file_", "")
+                    ext = val["name"].rsplit(".", 1)[-1]
+                    link = upload_file(
+                        content=val["content"],
+                        filename=f"{username}_{doc_name}.{ext}",
+                        username=username,
+                        mime_type=val["mime"],
+                    )
+                    if link:
+                        drive_links[doc_name] = link
+        except Exception:
+            pass
+
+        data = {
+            "username":    st.session_state.username,
+            "name":        st.session_state.user_name,
+            "grade":       "مرفوعة — بانتظار اللجنة",
+            "position":    st.session_state.get("department","") or st.session_state.get("position",""),
+            "scale":       scale_name,
+            "total_score": partial,
+            "breakdown":   json.dumps(scores, ensure_ascii=False),
+            "drive_links": json.dumps(drive_links, ensure_ascii=False),
+            "status":      "قيد المراجعة",
+        }
+        saved = False
+        try:
+            from utils.sheets import save_application
+            saved = save_application(data)
+        except Exception:
+            pass
+        if not saved:
+            Path("data/submissions").mkdir(parents=True, exist_ok=True)
+            fname = f"data/submissions/{st.session_state.username}_{datetime.now().strftime('%Y%m%d_%H%M')}.json"
+            with open(fname,"w",encoding="utf-8") as fp:
+                json.dump(data, fp, ensure_ascii=False, indent=2)
+
+        st.session_state[submitted_key] = True
+        st.session_state["submitted_data"] = data
+    st.rerun()
+
+
+def _show_submitted():
+    data = st.session_state.get("submitted_data", {})
+    st.markdown(f"""
+    <div class="alert al-ok">
+      ✅ <strong>تم تقديم ملفك بنجاح — لا يمكن التعديل بعد التقديم.</strong><br>
+      مجموع نقاطك الجزئية: <strong>{data.get('total_score', 0):.1f} نقطة</strong>
+    </div>
+    """, unsafe_allow_html=True)
+    st.markdown('<div class="card"><div class="card-title">📋 ملخص ما قدّمته</div>', unsafe_allow_html=True)
+    try:
+        breakdown = json.loads(data.get("breakdown","{}"))
+        for label, pts in breakdown.items():
+            if pts is None: continue
+            col = "#e74c3c" if float(pts) < 0 else "#1a3a5c"
+            st.markdown(
+                f'<div class="score-row"><span>{label}</span>' +
+                f'<span style="font-weight:700;color:{col};">{float(pts):+.1f} ن</span></div>',
+                unsafe_allow_html=True)
+    except Exception:
+        pass
+    st.markdown('</div>', unsafe_allow_html=True)
+    links = json.loads(data.get("drive_links","{}"))
+    if links:
+        st.markdown('<div class="card"><div class="card-title">📎 وثائقك على Google Drive</div>', unsafe_allow_html=True)
+        for name, link in links.items():
+            st.markdown(f"• [{name}]({link})")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+
 
 def show_form():
     _header()
+    if st.session_state.get("submitted_training"):
+        _show_submitted()
+        return
+
 
     # تهيئة القوائم الديناميكية
     for lst in ["tr_articles","tr_interventions","tr_patents",
@@ -481,11 +572,11 @@ def show_form():
     decl = st.checkbox("أُقرّ بأن جميع المعلومات المُدرجة صحيحة وكاملة وأتحمل المسؤولية الكاملة.")
     if st.button("📤 تقديم الملف النهائي",
                  disabled=not (decl and rank_doc), use_container_width=True):
-        _upload_and_save(partial, scores, "تربص تحسين المستوى")
+        _do_submit(partial, scores, "تربص تحسين المستوى", "submitted_training")
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-def _upload_and_save(partial, scores, "تربص تحسين المستوى"):
+def _do_submit(partial, scores, "تربص تحسين المستوى", "submitted_training"):
     data = {
         "username":     st.session_state.username,
         "name":         st.session_state.user_name,

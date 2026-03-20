@@ -48,25 +48,29 @@ def _score_line(label, pts, max_pts=None, neg=False):
                 unsafe_allow_html=True)
 
 
-def _smart_upload(label, session_key, required=True):
-    """رفع ملف ذكي — يحفظ المحتوى في session_state فور الرفع"""
+
+def _smart_upload(label, skey, required=True):
     marker = " *" if required else " (اختياري)"
-    f = st.file_uploader(f"📎 {label}{marker}",
-                         type=["pdf","jpg","jpeg","png"],
-                         key=f"uploader_{session_key}")
-    if f is not None:
-        st.session_state[f"file_{session_key}"] = {
-            "name": f.name, "content": f.read(), "type": f.type,
+    uploaded = st.file_uploader(
+        f"📎 {label}{marker}",
+        type=["pdf","jpg","jpeg","png"],
+        key=f"uploader_{skey}"
+    )
+    if uploaded is not None:
+        st.session_state[f"file_{skey}"] = {
+            "name": uploaded.name, "content": uploaded.read(), "mime": uploaded.type,
         }
-    has_file = f"file_{session_key}" in st.session_state
-    if has_file:
-        fname = st.session_state[f"file_{session_key}"]["name"]
-        st.markdown(f'<div style="font-size:.78rem;color:#1a7a4a;margin-top:-6px;">✅ {fname}</div>',
-                    unsafe_allow_html=True)
+    has = f"file_{skey}" in st.session_state
+    if has:
+        st.markdown(
+            f'<div style="font-size:.78rem;color:#1a7a4a;margin-top:-6px;">' +
+            f'✅ {st.session_state[f"file_{skey}"]["name"]}</div>',
+            unsafe_allow_html=True)
     elif required:
-        st.markdown('<div style="font-size:.78rem;color:#e74c3c;margin-top:-6px;">⚠️ الوثيقة مطلوبة</div>',
-                    unsafe_allow_html=True)
-    return has_file
+        st.markdown(
+            '<div style="font-size:.78rem;color:#e74c3c;margin-top:-6px;">⚠️ الوثيقة مطلوبة</div>',
+            unsafe_allow_html=True)
+    return has
 
 
 def _add_btn(key):
@@ -85,6 +89,10 @@ def _item_pts(pts):
 # ══════════════════════════════════════════════════
 def show_form():
     _header()
+    if st.session_state.get("submitted_researcher"):
+        _show_submitted()
+        return
+
 
     for lst in ["rs_articles","rs_interventions","rs_patents",
                 "rs_projects","rs_natl_studies","rs_intl_studies"]:
@@ -356,11 +364,11 @@ def show_form():
     decl = st.checkbox("أُقرّ بأن جميع المعلومات المُدرجة صحيحة وكاملة وأتحمل المسؤولية الكاملة.")
     if st.button("📤 تقديم الملف النهائي",
                  disabled=not decl, use_container_width=True):
-        _upload_and_save(partial, scores, "التربصات قصيرة المدى للباحثين الدائمين")
+        _do_submit(partial, scores, "التربصات قصيرة المدى للباحثين الدائمين", "submitted_researcher")
     st.markdown('</div>', unsafe_allow_html=True)
 
 
-def _upload_and_save(partial, scores, "التربصات قصيرة المدى للباحثين الدائمين"):
+def _do_submit(partial, scores, "التربصات قصيرة المدى للباحثين الدائمين", "submitted_researcher"):
     data = {
         "username":    st.session_state.username,
         "name":        st.session_state.user_name,

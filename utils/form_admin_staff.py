@@ -1,8 +1,12 @@
 """
 نموذج التقديم — سلم الموظفين الإداريين والتقنيين
-الحل: حفظ محتوى الملفات في session_state فور رفعها
+الإصلاحات:
+1. النقاط تُحسب حتى لو سالبة (لا max(0))
+2. _smart_upload يحفظ الملف في session_state فوراً
+3. Drive يرفع bytes من session_state
+4. بعد التقديم: عرض فقط بدون تعديل
 """
-import streamlit as st, json
+import streamlit as st, json, io
 from datetime import datetime
 from pathlib import Path
 
@@ -40,66 +44,90 @@ def _sec(num, title, info=None):
 
 def _score_line(label, pts, max_pts=None, neg=False):
     mx  = f" / {max_pts}" if max_pts else ""
-    col = "#e74c3c" if neg else "#1a3a5c"
-    val = f"{pts:+.1f}" if neg else f"{pts:.1f}"
+    col = "#e74c3c" if (neg or pts < 0) else "#1a3a5c"
+    val = f"{pts:+.1f}" if pts < 0 else f"{pts:.1f}"
     st.markdown(
         f'<div class="score-row"><span>{label}</span>'
         f'<span style="font-weight:700;color:{col};">{val}{mx} ن</span></div>',
         unsafe_allow_html=True)
 
 
-def _smart_upload(label, session_key, required=True):
+def _smart_upload(label, skey, required=True):
     """
-    رفع ملف ذكي — يحفظ المحتوى في session_state فور الرفع
-    يعيد True إذا الملف موجود (مرفوع الآن أو سابقاً)
+    يحفظ bytes الملف في session_state فور الرفع
+    يعيد True إذا الملف موجود
     """
     marker = " *" if required else " (اختياري)"
-    f = st.file_uploader(f"📎 {label}{marker}",
-                         type=["pdf","jpg","jpeg","png"],
-                         key=f"uploader_{session_key}")
-    
-    # حفظ المحتوى فور الرفع
-    if f is not None:
-        st.session_state[f"file_{session_key}"] = {
-            "name":    f.name,
-            "content": f.read(),
-            "type":    f.type,
+    uploaded = st.file_uploader(
+        f"📎 {label}{marker}",
+        type=["pdf","jpg","jpeg","png"],
+        key=f"uploader_{skey}"
+    )
+    if uploaded is not None:
+        # احفظ فوراً قبل أي rerun
+        st.session_state[f"file_{skey}"] = {
+            "name":    uploaded.name,
+            "content": uploaded.read(),
+            "mime":    uploaded.type,
         }
-    
-    # هل الملف موجود؟ (مرفوع الآن أو سابقاً في الجلسة)
-    has_file = f"file_{session_key}" in st.session_state
-    
-    if has_file:
-        fname = st.session_state[f"file_{session_key}"]["name"]
-        st.markdown(f'<div style="font-size:.78rem;color:#1a7a4a;margin-top:-6px;">✅ {fname}</div>',
-                    unsafe_allow_html=True)
+    has = f"file_{skey}" in st.session_state
+    if has:
+        st.markdown(
+            f'<div style="font-size:.78rem;color:#1a7a4a;margin-top:-6px;">'
+            f'✅ {st.session_state[f"file_{skey}"]["name"]}</div>',
+            unsafe_allow_html=True)
     elif required:
-        st.markdown('<div style="font-size:.78rem;color:#e74c3c;margin-top:-6px;">⚠️ الوثيقة مطلوبة</div>',
+        st.markdown(
+            '<div style="font-size:.78rem;color:#e74c3c;margin-top:-6px;">⚠️ الوثيقة مطلوبة</div>',
+            unsafe_allow_html=True)
+    return has
+
+
+def _show_submitted():
+    """عرض الملف المقدَّم بدون تعديل"""
+    data = st.session_state.get("submitted_data", {})
+    st.markdown(f"""
+    <div class="alert al-ok">
+      ✅ <strong>تم تقديم ملفك بنجاح — لا يمكن التعديل بعد التقديم.</strong><br>
+      مجموع نقاطك الجزئية: <strong>{data.get('total_score', 0):.1f} نقطة</strong>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="card"><div class="card-title">📋 ملخص ما قدّمته</div>',
+                unsafe_allow_html=True)
+    breakdown = json.loads(data.get("breakdown","{}"))
+    for label, pts in breakdown.items():
+        col = "#e74c3c" if float(pts) < 0 else "#1a3a5c"
+        st.markdown(
+            f'<div class="score-row"><span>{label}</span>'
+            f'<span style="font-weight:700;color:{col};">{float(pts):+.1f} ن</span></div>',
+            unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    links = json.loads(data.get("drive_links","{}"))
+    if links:
+        st.markdown('<div class="card"><div class="card-title">📎 وثائقك على Google Drive</div>',
                     unsafe_allow_html=True)
-    return has_file
-
-
-def _get_all_files() -> dict:
-    """جمع كل الملفات المحفوظة في session_state"""
-    files = {}
-    for key, val in st.session_state.items():
-        if key.startswith("file_") and isinstance(val, dict) and "content" in val:
-            doc_name = key.replace("file_", "")
-            files[doc_name] = val
-    return files
+        for name, link in links.items():
+            st.markdown(f"• [{name}]({link})")
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ══════════════════════════════════════════════════
 def show_form():
     _header()
 
-    # تهيئة القوائم
-    if "bodies"   not in st.session_state: st.session_state.bodies   = []
+    # ── إذا سبق التقديم: عرض فقط ─────────────────
+    if st.session_state.get("submitted_admin"):
+        _show_submitted()
+        return
+
+    if "bodies"    not in st.session_state: st.session_state.bodies    = []
     if "iprojects" not in st.session_state: st.session_state.iprojects = []
 
     # ① الرتبة الوظيفية
     _sec("①", "الرتبة الوظيفية",
-         "ارفع وثيقة آخر ترقية في الرتبة — اللجنة تحدد نقاطك (8–12 نقطة).")
+         "ارفع وثيقة آخر ترقية — اللجنة تحدد نقاطك (8–12 نقطة).")
     rank_ok = _smart_upload("وثيقة آخر ترقية في الرتبة", "rank_doc", required=True)
     st.markdown('<div class="alert al-wn" style="font-size:.85rem;">⏳ نقاط الرتبة تُحدَّد من اللجنة بعد مراجعة الوثيقة.</div>',
                 unsafe_allow_html=True)
@@ -109,7 +137,7 @@ def show_form():
     _sec("②", "الأقدمية في القطاع", "0.5 نقطة لكل سنة — حد أقصى 10 نقاط.")
     c1, c2 = st.columns(2)
     with c1:
-        seniority = st.number_input("عدد سنوات الخدمة في قطاع التعليم العالي",
+        seniority = st.number_input("عدد سنوات الخدمة",
                                     min_value=0, max_value=40,
                                     value=int(st.session_state.get("years", 0)))
     with c2:
@@ -126,21 +154,19 @@ def show_form():
         st.markdown("**أ. لغة التكوين**")
         lang_ok = st.checkbox("أتحكم في لغة التكوين — 1 نقطة", key="chk_lang")
         if lang_ok:
-            has_lang = _smart_upload("وثيقة إثبات التحكم في اللغة", "lang_doc", required=True)
-            if has_lang:
+            if _smart_upload("وثيقة إثبات التحكم في اللغة", "lang_doc", required=True):
                 lang_pts += 1.0
             else:
-                st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لن تُحتسب النقطة بدون وثيقة.</div>',
+                st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لن تُحتسب بدون وثيقة.</div>',
                             unsafe_allow_html=True)
     with c2:
         st.markdown("**ب. المركز المكثف للإنجليزية**")
         eng_ok = st.checkbox("مُسجَّل في المركز المكثف للإنجليزية — 2 نقطة", key="chk_eng")
         if eng_ok:
-            has_eng = _smart_upload("شهادة التسجيل في المركز", "eng_doc", required=True)
-            if has_eng:
+            if _smart_upload("شهادة التسجيل في المركز", "eng_doc", required=True):
                 lang_pts += 2.0
             else:
-                st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لن تُحتسب النقطتان بدون شهادة.</div>',
+                st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لن تُحتسب بدون شهادة.</div>',
                             unsafe_allow_html=True)
     _score_line("نقاط اللغات", lang_pts, 3)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -148,13 +174,13 @@ def show_form():
     # ④ المشروع الوزاري
     _sec("④", "المساهمة في المشروع الوزاري (القرار 1275)",
          "الإشراف على مشروع مذكرة تخرج لمؤسسة ناشئة / مصغرة / براءة اختراع.")
-    min_ok = st.checkbox("شاركت في تجسيد هذا المشروع — 1 نقطة", key="chk_min")
+    min_ok  = st.checkbox("شاركت في تجسيد هذا المشروع — 1 نقطة", key="chk_min")
     min_pts = 0.0
     if min_ok:
-        has_min = _smart_upload("وثيقة إثبات المشاركة", "min_doc", required=True)
-        min_pts = 1.0 if has_min else 0.0
-        if not has_min:
-            st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لن تُحتسب النقطة بدون وثيقة.</div>',
+        if _smart_upload("وثيقة إثبات المشاركة", "min_doc", required=True):
+            min_pts = 1.0
+        else:
+            st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لن تُحتسب بدون وثيقة.</div>',
                         unsafe_allow_html=True)
     _score_line("نقاط المشروع الوزاري", min_pts, 1)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -162,11 +188,10 @@ def show_form():
     # ⑤ هيئات المرافقة
     _sec("⑤", "هيئات المرافقة الجامعية",
          "CDC / CATI / حاضنة أعمال... — 1 نقطة / شهادة — حد أقصى 2 نقطة.")
-    _, btn_col = st.columns([5,1])
-    with btn_col:
+    _, bc = st.columns([5,1])
+    with bc:
         if st.button("➕ إضافة", key="add_body", use_container_width=True):
             st.session_state.bodies.append({}); st.rerun()
-
     body_pts = 0.0; del_body = []
     for i, _ in enumerate(st.session_state.bodies):
         st.markdown('<div class="item-block">', unsafe_allow_html=True)
@@ -174,15 +199,14 @@ def show_form():
         with ca:
             st.text_input(f"اسم الهيئة {i+1}", key=f"body_name_{i}", placeholder="مثال: CDC")
         with cb:
-            has = _smart_upload(f"شهادة العمل {i+1}", f"body_cert_{i}", required=True)
-            if has: body_pts += 1.0
+            if _smart_upload(f"شهادة العمل {i+1}", f"body_cert_{i}", required=True):
+                body_pts += 1.0
         with cc:
             st.write("")
             if st.button("🗑️", key=f"del_body_{i}"): del_body.append(i)
         st.markdown('</div>', unsafe_allow_html=True)
     for i in reversed(del_body):
         st.session_state.bodies.pop(i)
-        # حذف الملف المرتبط
         st.session_state.pop(f"file_body_cert_{i}", None)
         st.rerun()
     body_pts = min(body_pts, 2.0)
@@ -192,11 +216,10 @@ def show_form():
     # ⑥ مشاريع دولية
     _sec("⑥", "المشاركة في المشاريع الدولية",
          "Erasmus+ / PRIMA / Horizon... — 2 نقطة / مشروع — حد أقصى 2 نقطة.")
-    _, btn_col2 = st.columns([5,1])
-    with btn_col2:
+    _, bc2 = st.columns([5,1])
+    with bc2:
         if st.button("➕ إضافة", key="add_iproj", use_container_width=True):
             st.session_state.iprojects.append({}); st.rerun()
-
     iproj_pts = 0.0; del_iproj = []
     for i, _ in enumerate(st.session_state.iprojects):
         st.markdown('<div class="item-block">', unsafe_allow_html=True)
@@ -204,8 +227,8 @@ def show_form():
         with ca:
             st.text_input(f"اسم المشروع {i+1}", key=f"iproj_name_{i}", placeholder="Erasmus+ / PRIMA...")
         with cb:
-            has = _smart_upload(f"شهادة المشاركة {i+1}", f"iproj_cert_{i}", required=True)
-            if has: iproj_pts += 2.0
+            if _smart_upload(f"شهادة المشاركة {i+1}", f"iproj_cert_{i}", required=True):
+                iproj_pts += 2.0
         with cc:
             st.write("")
             if st.button("🗑️", key=f"del_iproj_{i}"): del_iproj.append(i)
@@ -221,13 +244,13 @@ def show_form():
     # ⑦ المنصب العالي
     _sec("⑦", "المنصب العالي (هيكلي/وظيفي)",
          "رئيس مصلحة / مدير فرعي... — 2 نقطة. وثيقة إثبات إلزامية.")
-    high_ok = st.checkbox("أشغل منصباً عالياً — 2 نقطة", key="chk_high")
+    high_ok  = st.checkbox("أشغل منصباً عالياً — 2 نقطة", key="chk_high")
     high_pts = 0.0
     if high_ok:
-        has_high = _smart_upload("وثيقة إثبات المنصب العالي", "high_doc", required=True)
-        high_pts = 2.0 if has_high else 0.0
-        if not has_high:
-            st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لن تُحتسب النقطتان بدون وثيقة.</div>',
+        if _smart_upload("وثيقة إثبات المنصب العالي", "high_doc", required=True):
+            high_pts = 2.0
+        else:
+            st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لن تُحتسب بدون وثيقة.</div>',
                         unsafe_allow_html=True)
     _score_line("نقاط المنصب العالي", high_pts, 2)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -235,30 +258,29 @@ def show_form():
     # ⑧ الاستفادات السابقة — -5 نقاط لكل استفادة
     _sec("⑧", "الاستفادات السابقة من التربصات في الخارج",
          "يُخصم 5 نقاط عن كل تربص استُفيد منه في آخر 6 سنوات.")
-    prev = st.number_input("عدد الاستفادات السابقة في آخر 6 سنوات",
-                           min_value=0, max_value=10, value=0)
+    prev      = st.number_input("عدد الاستفادات السابقة", min_value=0, max_value=10, value=0)
     deduction = prev * 5.0
     if deduction > 0:
         st.markdown(f'<div class="alert al-wn">سيُخصم: {deduction:.0f} نقطة ({prev} × 5)</div>',
                     unsafe_allow_html=True)
-    _score_line("الخصم", -deduction, neg=True)
+    _score_line("الخصم", -deduction)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ══ ملخص النقاط ══
+    # ══ ملخص النقاط — بدون max(0) ══
     partial = seniority_pts + lang_pts + min_pts + body_pts + iproj_pts + high_pts - deduction
-    partial = max(partial, 0.0)
+    # لا نوقف عند الصفر — قد يكون سالباً
 
     st.markdown('<div class="card"><div class="card-title">🏆 ملخص النقاط</div>',
                 unsafe_allow_html=True)
     rows = [
-        ("① الرتبة الوظيفية",        None,         "⏳ تُحدَّد من اللجنة (8–12 ن)"),
-        ("② الأقدمية",               seniority_pts, None),
-        ("③ اللغات",                 lang_pts,       None),
-        ("④ المشروع الوزاري",        min_pts,        None),
-        ("⑤ هيئات المرافقة",         body_pts,       None),
-        ("⑥ مشاريع دولية",           iproj_pts,      None),
-        ("⑦ المنصب العالي",           high_pts,       None),
-        ("⑧ خصم الاستفادات السابقة", -deduction,     None),
+        ("① الرتبة الوظيفية",        None,          "⏳ تُحدَّد من اللجنة (8–12 ن)"),
+        ("② الأقدمية",               seniority_pts,  None),
+        ("③ اللغات",                 lang_pts,        None),
+        ("④ المشروع الوزاري",        min_pts,         None),
+        ("⑤ هيئات المرافقة",         body_pts,        None),
+        ("⑥ مشاريع دولية",           iproj_pts,       None),
+        ("⑦ المنصب العالي",           high_pts,        None),
+        ("⑧ خصم الاستفادات السابقة", -deduction,      None),
     ]
     for label, pts, note in rows:
         if pts is None:
@@ -273,7 +295,7 @@ def show_form():
                 f'<span style="font-weight:700;color:{col};">{pts:+.1f} ن</span></div>',
                 unsafe_allow_html=True)
 
-    color = "#27ae60" if partial >= 20 else "#c8973a" if partial >= 10 else "#e74c3c"
+    color = "#27ae60" if partial >= 20 else "#c8973a" if partial >= 0 else "#e74c3c"
     st.markdown(f"""
     <div class="total-box" style="margin-top:.8rem;">
       <div style="color:rgba(255,255,255,.65);font-size:.82rem;">مجموع النقاط الجزئية</div>
@@ -283,7 +305,7 @@ def show_form():
     """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── الإقرار والتقديم
+    # ── الإقرار والتقديم ──────────────────────────
     st.markdown('<div class="card">', unsafe_allow_html=True)
     if not rank_ok:
         st.markdown('<div class="alert al-er">❌ لا يمكن التقديم بدون رفع وثيقة آخر ترقية.</div>',
@@ -292,35 +314,37 @@ def show_form():
     if st.button("📤 تقديم الملف النهائي",
                  disabled=not (decl and rank_ok),
                  use_container_width=True):
-        _submit(partial, {
+        breakdown = {
             "الأقدمية": seniority_pts, "اللغات": lang_pts,
             "المشروع الوزاري": min_pts, "هيئات المرافقة": body_pts,
             "المشاريع الدولية": iproj_pts, "المنصب العالي": high_pts,
             "خصم الاستفادات": -deduction,
-        })
+        }
+        _submit(partial, breakdown)
     st.markdown('</div>', unsafe_allow_html=True)
 
 
 def _submit(partial, breakdown):
     with st.spinner("⏳ جارٍ رفع الوثائق وحفظ الملف..."):
 
-        # ── رفع الوثائق على Drive ────────────────────
+        # ── رفع كل الوثائق المحفوظة في session_state ──
         drive_links = {}
         try:
             from utils.drive import upload_file
             username = st.session_state.username
-            all_files = _get_all_files()
-            for doc_name, file_data in all_files.items():
-                import io
-                link = upload_file(
-                    io.BytesIO(file_data["content"]),
-                    f"{username}_{doc_name}.{file_data['name'].rsplit('.',1)[-1]}",
-                    username,
-                    file_data["type"]
-                )
-                if link:
-                    drive_links[doc_name] = link
-        except Exception as e:
+            for key, val in st.session_state.items():
+                if key.startswith("file_") and isinstance(val, dict) and "content" in val:
+                    doc_name = key.replace("file_", "")
+                    ext      = val["name"].rsplit(".", 1)[-1]
+                    link = upload_file(
+                        content   = val["content"],
+                        filename  = f"{username}_{doc_name}.{ext}",
+                        username  = username,
+                        mime_type = val["mime"],
+                    )
+                    if link:
+                        drive_links[doc_name] = link
+        except Exception:
             pass
 
         # ── حفظ في Sheets ────────────────────────────
@@ -347,15 +371,8 @@ def _submit(partial, breakdown):
             with open(fname,"w",encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
-    st.balloons()
-    st.markdown(f"""
-    <div class="alert al-ok">
-      ✅ <strong>تم تقديم ملفك بنجاح!</strong><br>
-      مجموع نقاطك الجزئية: <strong>{partial:.1f} نقطة</strong><br>
-      وثائق مرفوعة على Drive: <strong>{len(drive_links)}</strong>
-    </div>
-    """, unsafe_allow_html=True)
-    if drive_links:
-        st.markdown("**روابط وثائقك:**")
-        for name, link in drive_links.items():
-            st.markdown(f"• [{name}]({link})")
+        # ── تسجيل أن المترشح قدّم ملفه ──────────────
+        st.session_state.submitted_admin = True
+        st.session_state.submitted_data  = data
+
+    st.rerun()  # يُعيد التشغيل لعرض صفحة "تم التقديم"
