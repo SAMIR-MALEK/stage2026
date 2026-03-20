@@ -13,7 +13,7 @@ st.markdown("""
 [data-testid="stSidebar"],[data-testid="collapsedControl"],
 #MainMenu,footer,header,.stDeployButton{display:none!important;}
 .main .block-container{padding:1.5rem 2rem 3rem;max-width:960px;margin:auto;}
-:root{--pr:#1a3a5c;--gd:#c8973a;--bd:#dce3ee;}
+:root{--pr:#1a3a5c;--gd:#c8973a;--ok:#27ae60;--er:#e74c3c;--bd:#dce3ee;--mu:#6b7f96;}
 .gov-header{background:linear-gradient(135deg,#0d1f35,#1a3a5c,#2a5298);color:white;
   padding:1.4rem 2rem;border-radius:14px;margin-bottom:1.5rem;
   border-bottom:4px solid #c8973a;text-align:center;}
@@ -45,7 +45,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 for k,v in {"logged_in":False,"role":None,"user_name":"","username":"",
-             "grade":"","years":0,"position":"","scale":""}.items():
+             "grade":"","years":0,"position":"","department":"","scale":""}.items():
     if k not in st.session_state: st.session_state[k]=v
 
 if not st.session_state.logged_in:
@@ -64,7 +64,7 @@ else:
         show_admin()
 
     elif role == "employee":
-        # ── توجيه حسب السلم ──────────────────────────
+        # ── توجيه حسب السلم ──────────────────────
         if scale == "الموظفون الإداريون والتقنيون":
             from utils.form_admin_staff import show_form
             show_form()
@@ -74,14 +74,12 @@ else:
             show_form()
 
         elif scale == "الإقامة العلمية قصيرة المدى":
-            # قريباً
-            st.markdown('<div class="gov-header"><h1>🔜 الإقامة العلمية قصيرة المدى</h1><p>هذا النموذج قيد الإعداد</p></div>',
-                        unsafe_allow_html=True)
+            from utils.form_scientific import show_form
+            show_form()
 
         elif scale == "الباحثون الدائمون":
-            # قريباً
-            st.markdown('<div class="gov-header"><h1>🔜 الباحثون الدائمون</h1><p>هذا النموذج قيد الإعداد</p></div>',
-                        unsafe_allow_html=True)
+            from utils.form_researcher import show_form
+            show_form()
 
         else:
-            st.error(f"السلم '{scale}' غير معروف — تواصل مع الإدارة.")
+            st.warning(f"السلم '{scale}' غير معرَّف في النظام. تواصل مع الإدارة.")
