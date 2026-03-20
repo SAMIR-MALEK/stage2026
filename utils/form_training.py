@@ -1,18 +1,13 @@
-"""
-نموذج التقديم — سلم تربص تحسين المستوى (أساتذة)
-المعايير المسقفة: حقول ثابتة
-المعايير غير المسقفة: زر ➕ إضافة إلى ما لا نهاية
-"""
-import streamlit as st, json
-from datetime import datetime, date
-from pathlib import Path
+"""نموذج التقديم — سلم تربص تحسين المستوى"""
+import streamlit as st
+from utils._shared import smart_upload, score_line, item_pts, do_submit, show_submitted
 
-# ── نقاط المعايير ──────────────────────────────────────────
-ARTICLE_PTS  = {"A+": 20, "A": 15, "B": 10, "C (وطني)": 5}
-INTERV_PTS   = {"دولية مفهرسة (Scopus/WOS)": 4, "دولية غير مفهرسة": 2, "وطنية": 1}
-PROJECT_PTS  = {"دولي (Erasmus+, PRIMA, Horizon...)": 10, "وطني (PNR, PRFU...)": 5}
-SUPERV_PTS   = {"مشرف رئيسي": 5, "مشرف مشارك": 3, "عضو لجنة مناقشة": 1}
-JURY_MAX     = 2   # حد أقصى لعضوية لجان المناقشة
+ARTICLE_PTS = {"A+": 20, "A": 15, "B": 10, "C (وطني)": 5}
+INTERV_PTS  = {"دولية مفهرسة (Scopus/WOS)": 4, "دولية غير مفهرسة": 2, "وطنية": 1}
+PROJECT_PTS = {"دولي (Erasmus+, PRIMA, Horizon...)": 10, "وطني (PNR, PRFU...)": 5}
+SUPERV_PTS  = {"مشرف رئيسي": 5, "مشرف مشارك": 3, "عضو لجنة مناقشة": 1}
+SUBMITTED_KEY = "submitted_training"
+SCALE_NAME    = "تربص تحسين المستوى"
 
 
 def _logout():
@@ -30,7 +25,6 @@ def _header():
       <div style="margin-top:.5rem;">
         <span class="badge b-blue">{st.session_state.user_name}</span>
         <span class="badge b-gold">{st.session_state.get('grade','')}</span>
-        <span class="badge b-green">{st.session_state.get('department','') or st.session_state.get('position','')}</span>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -43,567 +37,258 @@ def _sec(num, title, info=None):
     if info:
         st.markdown(f'<div class="alert al-in">{info}</div>', unsafe_allow_html=True)
 
-def _score_line(label, pts, max_pts=None, neg=False):
-    mx  = f"<small style='color:#6b7f96'> / {max_pts}</small>" if max_pts else ""
-    col = "#e74c3c" if neg else "#1a3a5c"
-    val = f"{pts:+.1f}" if neg else f"{pts:.1f}"
-    st.markdown(f'<div class="score-row"><span>{label}</span>'
-                f'<span style="font-weight:700;color:{col};">{val}{mx} ن</span></div>',
-                unsafe_allow_html=True)
-
-
-
-def _smart_upload(label, skey, required=True):
-    marker = " *" if required else " (اختياري)"
-    uploaded = st.file_uploader(
-        f"📎 {label}{marker}",
-        type=["pdf","jpg","jpeg","png"],
-        key=f"uploader_{skey}"
-    )
-    if uploaded is not None:
-        st.session_state[f"file_{skey}"] = {
-            "name": uploaded.name, "content": uploaded.read(), "mime": uploaded.type,
-        }
-    has = f"file_{skey}" in st.session_state
-    if has:
-        st.markdown(
-            f'<div style="font-size:.78rem;color:#1a7a4a;margin-top:-6px;">' +
-            f'✅ {st.session_state[f"file_{skey}"]["name"]}</div>',
-            unsafe_allow_html=True)
-    elif required:
-        st.markdown(
-            '<div style="font-size:.78rem;color:#e74c3c;margin-top:-6px;">⚠️ الوثيقة مطلوبة</div>',
-            unsafe_allow_html=True)
-    return has
-
-
 def _add_btn(key):
-    """زر إضافة عنصر جديد"""
     _, c = st.columns([5,1])
     with c:
         return st.button("➕ إضافة", key=key, use_container_width=True)
 
-def _del_btn(key):
-    return st.button("🗑️", key=key, help="حذف")
-
-
-# ══════════════════════════════════════════════════
-# النموذج الرئيسي
-# ══════════════════════════════════════════════════
-def _upload_and_save(partial, breakdown, scale_name):
-    """حفظ مشترك لكل السلالم — يرفع الوثائق ثم يحفظ في Sheets"""
-    import io, json
-    from datetime import datetime
-    from pathlib import Path
-
-    with st.spinner("⏳ جارٍ رفع الوثائق وحفظ الملف..."):
-        drive_links = {}
-        try:
-            from utils.drive import upload_file
-            username = st.session_state.username
-            for key, val in st.session_state.items():
-                if key.startswith("file_") and isinstance(val, dict) and "content" in val:
-                    doc_name = key.replace("file_", "")
-                    ext = val["name"].rsplit(".", 1)[-1]
-                    link = upload_file(
-                        io.BytesIO(val["content"]),
-                        f"{username}_{doc_name}.{ext}",
-                        username,
-                        val["type"]
-                    )
-                    if link:
-                        drive_links[doc_name] = link
-        except Exception:
-            pass
-
-        data = {
-            "username":    st.session_state.username,
-            "name":        st.session_state.user_name,
-            "grade":       "مرفوعة — بانتظار اللجنة",
-            "position":    st.session_state.get("department","") or st.session_state.get("position",""),
-            "scale":       scale_name,
-            "total_score": partial,
-            "breakdown":   json.dumps(breakdown, ensure_ascii=False),
-            "drive_links": json.dumps(drive_links, ensure_ascii=False),
-            "status":      "قيد المراجعة",
-        }
-        saved = False
-        try:
-            from utils.sheets import save_application
-            saved = save_application(data)
-        except Exception:
-            pass
-        if not saved:
-            Path("data/submissions").mkdir(parents=True, exist_ok=True)
-            fname = f"data/submissions/{st.session_state.username}_{datetime.now().strftime('%Y%m%d_%H%M')}.json"
-            with open(fname,"w",encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-
-    st.balloons()
-    st.markdown(f"""
-    <div class="alert al-ok">
-      ✅ <strong>تم تقديم ملفك بنجاح!</strong><br>
-      مجموع نقاطك الجزئية: <strong>{partial:.1f} نقطة</strong><br>
-      وثائق مرفوعة على Drive: <strong>{len(drive_links)}</strong>
-    </div>
-    """, unsafe_allow_html=True)
-    if drive_links:
-        st.markdown("**روابط وثائقك:**")
-        for name, link in drive_links.items():
-            st.markdown(f"• [{name}]({link})")
-
-def _do_submit(partial, scores, scale_name, submitted_key):
-    """دالة التقديم الموحدة لكل السلالم"""
-    import io, json
-    from datetime import datetime
-    from pathlib import Path
-
-    with st.spinner("⏳ جارٍ رفع الوثائق وحفظ الملف..."):
-        drive_links = {}
-        try:
-            from utils.drive import upload_file
-            username = st.session_state.username
-            for key, val in st.session_state.items():
-                if key.startswith("file_") and isinstance(val, dict) and "content" in val:
-                    doc_name = key.replace("file_", "")
-                    ext = val["name"].rsplit(".", 1)[-1]
-                    link = upload_file(
-                        content=val["content"],
-                        filename=f"{username}_{doc_name}.{ext}",
-                        username=username,
-                        mime_type=val["mime"],
-                    )
-                    if link:
-                        drive_links[doc_name] = link
-        except Exception:
-            pass
-
-        data = {
-            "username":    st.session_state.username,
-            "name":        st.session_state.user_name,
-            "grade":       "مرفوعة — بانتظار اللجنة",
-            "position":    st.session_state.get("department","") or st.session_state.get("position",""),
-            "scale":       scale_name,
-            "total_score": partial,
-            "breakdown":   json.dumps(scores, ensure_ascii=False),
-            "drive_links": json.dumps(drive_links, ensure_ascii=False),
-            "status":      "قيد المراجعة",
-        }
-        saved = False
-        try:
-            from utils.sheets import save_application
-            saved = save_application(data)
-        except Exception:
-            pass
-        if not saved:
-            Path("data/submissions").mkdir(parents=True, exist_ok=True)
-            fname = f"data/submissions/{st.session_state.username}_{datetime.now().strftime('%Y%m%d_%H%M')}.json"
-            with open(fname,"w",encoding="utf-8") as fp:
-                json.dump(data, fp, ensure_ascii=False, indent=2)
-
-        st.session_state[submitted_key] = True
-        st.session_state["submitted_data"] = data
-    st.rerun()
-
-
-def _show_submitted():
-    data = st.session_state.get("submitted_data", {})
-    st.markdown(f"""
-    <div class="alert al-ok">
-      ✅ <strong>تم تقديم ملفك بنجاح — لا يمكن التعديل بعد التقديم.</strong><br>
-      مجموع نقاطك الجزئية: <strong>{data.get('total_score', 0):.1f} نقطة</strong>
-    </div>
-    """, unsafe_allow_html=True)
-    st.markdown('<div class="card"><div class="card-title">📋 ملخص ما قدّمته</div>', unsafe_allow_html=True)
-    try:
-        breakdown = json.loads(data.get("breakdown","{}"))
-        for label, pts in breakdown.items():
-            if pts is None: continue
-            col = "#e74c3c" if float(pts) < 0 else "#1a3a5c"
-            st.markdown(
-                f'<div class="score-row"><span>{label}</span>' +
-                f'<span style="font-weight:700;color:{col};">{float(pts):+.1f} ن</span></div>',
-                unsafe_allow_html=True)
-    except Exception:
-        pass
-    st.markdown('</div>', unsafe_allow_html=True)
-    links = json.loads(data.get("drive_links","{}"))
-    if links:
-        st.markdown('<div class="card"><div class="card-title">📎 وثائقك على Google Drive</div>', unsafe_allow_html=True)
-        for name, link in links.items():
-            st.markdown(f"• [{name}]({link})")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-
 
 def show_form():
     _header()
-    if st.session_state.get("submitted_training"):
-        _show_submitted()
+
+    if st.session_state.get(SUBMITTED_KEY):
+        show_submitted()
         return
 
-
-    # تهيئة القوائم الديناميكية
-    for lst in ["tr_articles","tr_interventions","tr_patents",
-                "tr_projects","tr_supervisions"]:
-        if lst not in st.session_state:
-            st.session_state[lst] = []
+    for lst in ["tr_articles","tr_interventions","tr_patents","tr_projects","tr_supervisions"]:
+        if lst not in st.session_state: st.session_state[lst] = []
 
     scores = {}
 
-    # ──────────────────────────────────────────────
-    # ① الرتبة العلمية — اللجنة تحدد النقاط
-    # ──────────────────────────────────────────────
-    _sec("①", "الرتبة العلمية",
-         "ارفع وثيقة <strong>آخر ترقية</strong> — اللجنة تحدد نقاطك (7 – 9 نقطة).")
-    rank_doc = _smart_upload("وثيقة آخر ترقية في الرتبة", "rank_doc", required=True)
-    st.markdown('<div class="alert al-wn" style="font-size:.85rem;">⏳ نقاط الرتبة تُضاف من اللجنة بعد مراجعة الوثيقة.</div>',
-                unsafe_allow_html=True)
+    # ① الرتبة
+    _sec("①", "الرتبة العلمية", "ارفع وثيقة آخر ترقية — اللجنة تحدد نقاطك (3–9 نقاط).")
+    rank_ok = smart_upload("وثيقة آخر ترقية في الرتبة", "tr_rank", required=True)
+    st.markdown('<div class="alert al-wn" style="font-size:.85rem;">⏳ نقاط الرتبة تُحدَّد من اللجنة.</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
-    scores["الرتبة"] = None   # اللجنة
+    scores["① الرتبة العلمية"] = None
 
-    # ──────────────────────────────────────────────
-    # ② التسجيل المنتظم — مسقَّف (حسب عدد السنوات)
-    # ──────────────────────────────────────────────
-    _sec("②", "التسجيل المنتظم",
-         "2 نقطة لكل سنة تسجيل منتظم في الدكتوراه أو التأهيل.")
-    reg_count = st.number_input("عدد سنوات التسجيل المنتظم", 0, 10, 0, key="tr_reg")
-    reg_doc   = _smart_upload("وثيقة إثبات التسجيل", "reg_doc", required=reg_count > 0)
-    reg_pts   = reg_count * 2.0
-    _score_line("نقاط التسجيل المنتظم", reg_pts)
+    # ② التسجيل المنتظم
+    _sec("②", "التسجيل المنتظم", "2 نقطة لكل سنة تسجيل.")
+    c1, c2 = st.columns(2)
+    with c1:
+        reg = st.number_input("عدد سنوات التسجيل", 0, 10, 0, key="tr_reg")
+    with c2:
+        smart_upload("وثيقة التسجيل", "tr_reg_doc", required=reg > 0)
+    reg_pts = reg * 2.0
+    score_line("نقاط التسجيل", reg_pts)
     st.markdown('</div>', unsafe_allow_html=True)
-    scores["التسجيل المنتظم"] = reg_pts
+    scores["② التسجيل المنتظم"] = reg_pts
 
-    # ──────────────────────────────────────────────
-    # ③ الاستفادات السابقة — مسقَّف
-    # ──────────────────────────────────────────────
-    _sec("③", "الاستفادات السابقة",
-         "يُخصم 5 نقاط لكل استفادة سابقة في آخر 6 سنوات (n = عدد الاستفادات السابقة). قد تكون سالبة.")
-    prev_n    = st.number_input("عدد الاستفادات السابقة (n)", 0, 15, 0, key="tr_prev")
+    # ③ الاستفادات السابقة
+    _sec("③", "الاستفادات السابقة", "يُخصم 5 نقاط لكل استفادة في آخر 6 سنوات.")
+    prev_n   = st.number_input("عدد الاستفادات السابقة", 0, 15, 0, key="tr_prev")
     prev_pts = float(prev_n * -5)
-    _score_line("نقاط / خصم الاستفادات", prev_pts, neg=(prev_pts < 0))
+    if prev_pts < 0:
+        st.markdown(f'<div class="alert al-wn">سيُخصم: {abs(prev_pts):.0f} نقطة</div>', unsafe_allow_html=True)
+    score_line("خصم الاستفادات", prev_pts)
     st.markdown('</div>', unsafe_allow_html=True)
-    scores["الاستفادات السابقة"] = prev_pts
+    scores["③ الاستفادات السابقة"] = prev_pts
 
-    # ──────────────────────────────────────────────
-    # ④ الجوائز — مسقَّف (5 نقاط)
-    # ──────────────────────────────────────────────
-    _sec("④", "الجوائز الوطنية والدولية المرتبطة بإنجازات علمية",
-         "5 نقاط — وثيقة الجائزة إلزامية.")
-    award_ok  = st.checkbox("حصلت على جائزة وطنية أو دولية — 5 نقطة", key="tr_award")
-    award_doc = None
+    # ④ الجوائز
+    _sec("④", "الجوائز الوطنية والدولية", "5 نقاط — وثيقة إلزامية.")
+    award_ok  = st.checkbox("حصلت على جائزة — 5 نقطة", key="tr_award")
+    award_pts = 0.0
     if award_ok:
-        award_doc = _smart_upload("وثيقة الجائزة أو شهادة التكريم", "award_doc", required=True)
-    award_pts = 5.0 if (award_ok and award_doc) else 0.0
-    _score_line("نقاط الجوائز", award_pts, 5)
+        if smart_upload("وثيقة الجائزة", "tr_award_doc", required=True):
+            award_pts = 5.0
+        else:
+            st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لن تُحتسب بدون وثيقة.</div>', unsafe_allow_html=True)
+    score_line("نقاط الجوائز", award_pts, 5)
     st.markdown('</div>', unsafe_allow_html=True)
-    scores["الجوائز"] = award_pts
+    scores["④ الجوائز"] = award_pts
 
-    # ──────────────────────────────────────────────
-    # ⑤ المقالات العلمية — غير مسقَّفة ➕ إلى ما لا نهاية
-    # ──────────────────────────────────────────────
-    _sec("⑤", "المقالات العلمية المنشورة",
-         "أضف مقالاً لكل ورقة منشورة. الرابط (DOI) إلزامي لكل مقال.")
-
-    if _add_btn("add_art"):
-        st.session_state.tr_articles.append({}); st.rerun()
-
+    # ⑤ المقالات
+    _sec("⑤", "المقالات العلمية المنشورة", "رابط DOI إلزامي لكل مقال.")
+    if _add_btn("tr_add_art"): st.session_state.tr_articles.append({}); st.rerun()
     art_pts = 0.0; del_art = []
     for i, _ in enumerate(st.session_state.tr_articles):
-        st.markdown(f'<div class="item-block">', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns([3, 2, 1])
+        st.markdown('<div class="item-block">', unsafe_allow_html=True)
+        c1, c2, c3 = st.columns([3,2,1])
         with c1:
-            st.text_input(f"عنوان المقال {i+1} *", key=f"art_title_{i}",
-                          placeholder="عنوان المقال العلمي")
-            st.text_input(f"اسم المجلة {i+1} *", key=f"art_journal_{i}",
-                          placeholder="اسم المجلة")
+            st.text_input(f"عنوان المقال {i+1}", key=f"tr_art_title_{i}", placeholder="عنوان المقال")
+            st.text_input(f"اسم المجلة {i+1}", key=f"tr_art_journal_{i}", placeholder="اسم المجلة")
         with c2:
-            scope = st.selectbox("النطاق", ["دولي","وطني"], key=f"art_scope_{i}")
+            scope = st.selectbox("النطاق", ["دولي","وطني"], key=f"tr_art_scope_{i}")
             cats  = list(ARTICLE_PTS.keys()) if scope == "دولي" else ["C (وطني)"]
-            cat   = st.selectbox("التصنيف", cats, key=f"art_cat_{i}")
-            st.text_input(f"رابط DOI *", key=f"art_doi_{i}",
-                          placeholder="https://doi.org/...")
+            cat   = st.selectbox("التصنيف", cats, key=f"tr_art_cat_{i}")
+            doi   = st.text_input(f"رابط DOI", key=f"tr_art_doi_{i}", placeholder="https://doi.org/...")
         with c3:
-            f = st.file_uploader(f"📎 PDF {i+1}", type=["pdf"], key=f"art_pdf_{i}")
-            if f: st.markdown(f'<div style="font-size:.75rem;color:#1a7a4a;">✅</div>', unsafe_allow_html=True)
-            doi_val = st.session_state.get(f"art_doi_{i}", "")
-            pts = ARTICLE_PTS.get(cat, 0) if doi_val else 0
-            st.markdown(f'<div style="font-weight:700;color:#1a3a5c;text-align:center;font-size:1rem;">{pts}ن</div>',
-                        unsafe_allow_html=True)
-            if _del_btn(f"del_art_{i}"): del_art.append(i)
-        art_pts += ARTICLE_PTS.get(cat, 0) if st.session_state.get(f"art_doi_{i}","") else 0
+            smart_upload(f"PDF {i+1}", f"tr_art_pdf_{i}", required=False)
+            pts = ARTICLE_PTS.get(cat, 0) if doi else 0
+            item_pts(pts)
+            if st.button("🗑️", key=f"tr_del_art_{i}"): del_art.append(i)
+        art_pts += pts
         st.markdown('</div>', unsafe_allow_html=True)
     for i in reversed(del_art): st.session_state.tr_articles.pop(i); st.rerun()
-    _score_line("مجموع نقاط المقالات", art_pts)
+    score_line("مجموع نقاط المقالات", art_pts)
     st.markdown('</div>', unsafe_allow_html=True)
-    scores["المقالات"] = art_pts
+    scores["⑤ المقالات"] = art_pts
 
-    # ──────────────────────────────────────────────
-    # ⑥ المداخلات — غير مسقَّفة ➕
-    # ──────────────────────────────────────────────
-    _sec("⑥", "المداخلات في المؤتمرات",
-         "شهادة المشاركة <strong>إلزامية</strong> لكل مداخلة — بدونها لا تُحتسب النقاط.")
-
-    if _add_btn("add_int"):
-        st.session_state.tr_interventions.append({}); st.rerun()
-
+    # ⑥ المداخلات
+    _sec("⑥", "المداخلات في المؤتمرات", "شهادة المشاركة إلزامية.")
+    if _add_btn("tr_add_int"): st.session_state.tr_interventions.append({}); st.rerun()
     int_pts = 0.0; del_int = []
     for i, _ in enumerate(st.session_state.tr_interventions):
         st.markdown('<div class="item-block">', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns([3, 2, 1])
+        c1, c2, c3 = st.columns([3,2,1])
         with c1:
-            st.text_input(f"عنوان المداخلة {i+1} *", key=f"int_title_{i}",
-                          placeholder="عنوان الورقة البحثية")
-            st.text_input(f"اسم المؤتمر {i+1} *", key=f"int_conf_{i}",
-                          placeholder="اسم المؤتمر أو الملتقى")
+            st.text_input(f"عنوان المداخلة {i+1}", key=f"tr_int_title_{i}", placeholder="عنوان الورقة")
+            st.text_input(f"اسم المؤتمر {i+1}", key=f"tr_int_conf_{i}", placeholder="اسم المؤتمر")
         with c2:
-            int_type = st.selectbox("نوع المداخلة", list(INTERV_PTS.keys()), key=f"int_type_{i}")
-            st.date_input(f"تاريخ المداخلة", key=f"int_date_{i}")
+            int_type = st.selectbox("نوع المداخلة", list(INTERV_PTS.keys()), key=f"tr_int_type_{i}")
+            st.date_input("تاريخ المداخلة", key=f"tr_int_date_{i}")
         with c3:
-            # cert = st.file_uploader(f"📎 شهادة {i+1} *",
-                                    type=["pdf","jpg","jpeg","png"], key=f"int_cert_{i}")
-            # auto
-            if has:   st.markdown('<div style="font-size:.75rem;color:#1a7a4a;">✅</div>', unsafe_allow_html=True)
-            else:     st.markdown('<div style="font-size:.75rem;color:#e74c3c;">⚠️</div>', unsafe_allow_html=True)
-            pts  = INTERV_PTS.get(int_type, 0) if has else 0
-            st.markdown(f'<div style="font-weight:700;color:#1a3a5c;text-align:center;font-size:1rem;">{pts}ن</div>',
-                        unsafe_allow_html=True)
-            if _del_btn(f"del_int_{i}"): del_int.append(i)
+            has = smart_upload(f"شهادة {i+1}", f"tr_int_cert_{i}", required=True)
+            pts = INTERV_PTS.get(int_type, 0) if has else 0
+            item_pts(pts)
+            if st.button("🗑️", key=f"tr_del_int_{i}"): del_int.append(i)
             int_pts += pts
         st.markdown('</div>', unsafe_allow_html=True)
     for i in reversed(del_int): st.session_state.tr_interventions.pop(i); st.rerun()
-    _score_line("مجموع نقاط المداخلات", int_pts)
+    score_line("مجموع نقاط المداخلات", int_pts)
     st.markdown('</div>', unsafe_allow_html=True)
-    scores["المداخلات"] = int_pts
+    scores["⑥ المداخلات"] = int_pts
 
-    # ──────────────────────────────────────────────
-    # ⑦ براءات الاختراع — غير مسقَّفة ➕ (حد 45 ن)
-    # ──────────────────────────────────────────────
-    _sec("⑦", "براءات الاختراع",
-         "15 نقطة لكل براءة — <strong>حد أقصى 45 نقطة</strong>. شهادة البراءة إلزامية.")
-
-    if _add_btn("add_pat"):
-        st.session_state.tr_patents.append({}); st.rerun()
-
+    # ⑦ براءات الاختراع
+    _sec("⑦", "براءات الاختراع", "15 نقطة / براءة — حد أقصى 45 نقطة.")
+    if _add_btn("tr_add_pat"): st.session_state.tr_patents.append({}); st.rerun()
     pat_pts = 0.0; del_pat = []
     for i, _ in enumerate(st.session_state.tr_patents):
         st.markdown('<div class="item-block">', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns([3, 2, 1])
+        c1, c2, c3 = st.columns([3,2,1])
         with c1:
-            st.text_input(f"عنوان البراءة {i+1} *", key=f"pat_title_{i}",
-                          placeholder="عنوان الاختراع")
-            st.text_input(f"رقم البراءة {i+1}", key=f"pat_num_{i}",
-                          placeholder="رقم شهادة البراءة")
+            st.text_input(f"عنوان البراءة {i+1}", key=f"tr_pat_title_{i}", placeholder="عنوان الاختراع")
+            st.text_input(f"رقم البراءة", key=f"tr_pat_num_{i}", placeholder="رقم الشهادة")
         with c2:
-            st.date_input(f"تاريخ الحصول", key=f"pat_date_{i}")
-            st.text_input(f"رابط (اختياري)", key=f"pat_url_{i}",
-                          placeholder="https://...")
+            st.date_input("تاريخ الحصول", key=f"tr_pat_date_{i}")
         with c3:
-            # cert = st.file_uploader(f"📎 شهادة {i+1} *",
-                                    type=["pdf","jpg","jpeg","png"], key=f"pat_cert_{i}")
-            # auto
-            if has:   st.markdown('<div style="font-size:.75rem;color:#1a7a4a;">✅</div>', unsafe_allow_html=True)
-            else:     st.markdown('<div style="font-size:.75rem;color:#e74c3c;">⚠️</div>', unsafe_allow_html=True)
-            pts  = 15 if has else 0
-            st.markdown(f'<div style="font-weight:700;color:#1a3a5c;text-align:center;font-size:1rem;">{pts}ن</div>',
-                        unsafe_allow_html=True)
-            if _del_btn(f"del_pat_{i}"): del_pat.append(i)
+            has = smart_upload(f"شهادة {i+1}", f"tr_pat_cert_{i}", required=True)
+            pts = 15 if has else 0
+            item_pts(pts)
+            if st.button("🗑️", key=f"tr_del_pat_{i}"): del_pat.append(i)
             pat_pts += pts
         st.markdown('</div>', unsafe_allow_html=True)
     for i in reversed(del_pat): st.session_state.tr_patents.pop(i); st.rerun()
     pat_pts = min(pat_pts, 45.0)
-    _score_line("مجموع نقاط براءات الاختراع", pat_pts, 45)
+    score_line("نقاط براءات الاختراع", pat_pts, 45)
     st.markdown('</div>', unsafe_allow_html=True)
-    scores["براءات الاختراع"] = pat_pts
+    scores["⑦ براءات الاختراع"] = pat_pts
 
-    # ──────────────────────────────────────────────
-    # ⑧ المشاريع البحثية — غير مسقَّفة ➕
-    # ──────────────────────────────────────────────
-    _sec("⑧", "المشاريع البحثية",
-         "أضف كل مشروع بحثي شاركت فيه. وثيقة الإثبات إلزامية.")
-
-    if _add_btn("add_proj"):
-        st.session_state.tr_projects.append({}); st.rerun()
-
+    # ⑧ المشاريع
+    _sec("⑧", "المشاريع البحثية", "وثيقة إثبات إلزامية.")
+    if _add_btn("tr_add_proj"): st.session_state.tr_projects.append({}); st.rerun()
     proj_pts = 0.0; del_proj = []
     for i, _ in enumerate(st.session_state.tr_projects):
         st.markdown('<div class="item-block">', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns([3, 2, 1])
+        c1, c2, c3 = st.columns([3,2,1])
         with c1:
-            st.text_input(f"عنوان المشروع {i+1} *", key=f"proj_title_{i}",
-                          placeholder="عنوان المشروع البحثي")
-            st.text_input(f"رابط المشروع (اختياري)", key=f"proj_url_{i}",
-                          placeholder="https://...")
+            st.text_input(f"عنوان المشروع {i+1}", key=f"tr_proj_title_{i}", placeholder="عنوان المشروع")
         with c2:
-            ptype = st.selectbox("نوع المشروع", list(PROJECT_PTS.keys()), key=f"proj_type_{i}")
-            st.date_input("تاريخ البداية", key=f"proj_date_{i}")
+            ptype = st.selectbox("نوع المشروع", list(PROJECT_PTS.keys()), key=f"tr_proj_type_{i}")
+            st.date_input("تاريخ البداية", key=f"tr_proj_date_{i}")
         with c3:
-            # cert = st.file_uploader(f"📎 وثيقة {i+1} *",
-                                    type=["pdf","jpg","jpeg","png"], key=f"proj_cert_{i}")
-            # auto
-            if has:   st.markdown('<div style="font-size:.75rem;color:#1a7a4a;">✅</div>', unsafe_allow_html=True)
-            else:     st.markdown('<div style="font-size:.75rem;color:#e74c3c;">⚠️</div>', unsafe_allow_html=True)
-            pts  = PROJECT_PTS.get(ptype, 0) if has else 0
-            st.markdown(f'<div style="font-weight:700;color:#1a3a5c;text-align:center;font-size:1rem;">{pts}ن</div>',
-                        unsafe_allow_html=True)
-            if _del_btn(f"del_proj_{i}"): del_proj.append(i)
+            has = smart_upload(f"وثيقة {i+1}", f"tr_proj_cert_{i}", required=True)
+            pts = PROJECT_PTS.get(ptype, 0) if has else 0
+            item_pts(pts)
+            if st.button("🗑️", key=f"tr_del_proj_{i}"): del_proj.append(i)
             proj_pts += pts
         st.markdown('</div>', unsafe_allow_html=True)
     for i in reversed(del_proj): st.session_state.tr_projects.pop(i); st.rerun()
-    _score_line("مجموع نقاط المشاريع", proj_pts)
+    score_line("مجموع نقاط المشاريع", proj_pts)
     st.markdown('</div>', unsafe_allow_html=True)
-    scores["المشاريع"] = proj_pts
+    scores["⑧ المشاريع"] = proj_pts
 
-    # ──────────────────────────────────────────────
-    # ⑨ الإشراف على الدكتوراه — غير مسقَّف ➕
-    # ──────────────────────────────────────────────
-    _sec("⑨", "الإشراف على أطروحات الدكتوراه",
-         "أضف كل أطروحة شاركت في الإشراف عليها أو مناقشتها. محضر المناقشة إلزامي.")
-
-    if _add_btn("add_sup"):
-        st.session_state.tr_supervisions.append({}); st.rerun()
-
-    sup_pts = 0.0; jury_count = 0; del_sup = []
+    # ⑨ الإشراف
+    _sec("⑨", "الإشراف على الدكتوراه", "محضر المناقشة إلزامي.")
+    if _add_btn("tr_add_sup"): st.session_state.tr_supervisions.append({}); st.rerun()
+    sup_pts = 0.0; jury_n = 0; del_sup = []
     for i, _ in enumerate(st.session_state.tr_supervisions):
         st.markdown('<div class="item-block">', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns([3, 2, 1])
+        c1, c2, c3 = st.columns([3,2,1])
         with c1:
-            st.text_input(f"اسم الطالب {i+1}", key=f"sup_stud_{i}",
-                          placeholder="اسم الطالب")
-            st.text_input(f"عنوان الأطروحة {i+1}", key=f"sup_thesis_{i}",
-                          placeholder="عنوان أطروحة الدكتوراه")
+            st.text_input(f"اسم الطالب {i+1}", key=f"tr_sup_stud_{i}", placeholder="اسم الطالب")
+            st.text_input(f"عنوان الأطروحة {i+1}", key=f"tr_sup_thesis_{i}", placeholder="عنوان الأطروحة")
         with c2:
-            stype = st.selectbox("الصفة", list(SUPERV_PTS.keys()), key=f"sup_type_{i}")
-            st.date_input("تاريخ المناقشة", key=f"sup_date_{i}")
+            stype = st.selectbox("الصفة", list(SUPERV_PTS.keys()), key=f"tr_sup_type_{i}")
+            st.date_input("تاريخ المناقشة", key=f"tr_sup_date_{i}")
         with c3:
-            # cert = st.file_uploader(f"📎 محضر {i+1} *",
-                                    type=["pdf","jpg","jpeg","png"], key=f"sup_cert_{i}")
-            # auto
-            if has:   st.markdown('<div style="font-size:.75rem;color:#1a7a4a;">✅</div>', unsafe_allow_html=True)
-            else:     st.markdown('<div style="font-size:.75rem;color:#e74c3c;">⚠️</div>', unsafe_allow_html=True)
+            has = smart_upload(f"محضر {i+1}", f"tr_sup_cert_{i}", required=True)
             if stype == "عضو لجنة مناقشة":
-                jury_count += 1
-                pts = SUPERV_PTS["عضو لجنة مناقشة"] if (has and jury_count <= JURY_MAX) else 0
-                if jury_count > JURY_MAX:
-                    st.markdown('<div style="font-size:.72rem;color:#e74c3c;">تجاوز الحد (2)</div>',
-                                unsafe_allow_html=True)
+                jury_n += 1
+                pts = SUPERV_PTS["عضو لجنة مناقشة"] if (has and jury_n <= 2) else 0
+                if jury_n > 2:
+                    st.markdown('<div style="font-size:.72rem;color:#e74c3c;">تجاوز الحد (2)</div>', unsafe_allow_html=True)
             else:
                 pts = SUPERV_PTS.get(stype, 0) if has else 0
-            st.markdown(f'<div style="font-weight:700;color:#1a3a5c;text-align:center;font-size:1rem;">{pts}ن</div>',
-                        unsafe_allow_html=True)
-            if _del_btn(f"del_sup_{i}"): del_sup.append(i)
+            item_pts(pts)
+            if st.button("🗑️", key=f"tr_del_sup_{i}"): del_sup.append(i)
             sup_pts += pts
         st.markdown('</div>', unsafe_allow_html=True)
     for i in reversed(del_sup): st.session_state.tr_supervisions.pop(i); st.rerun()
-    _score_line("مجموع نقاط الإشراف على الدكتوراه", sup_pts)
+    score_line("مجموع نقاط الإشراف", sup_pts)
     st.markdown('</div>', unsafe_allow_html=True)
-    scores["الإشراف على الدكتوراه"] = sup_pts
+    scores["⑨ الإشراف على الدكتوراه"] = sup_pts
 
-    # ──────────────────────────────────────────────
-    # ⑩ تأطير الماستر والليسانس — مسقَّف (حد 3 لكل)
-    # ──────────────────────────────────────────────
-    _sec("⑩", "تأطير مذكرات الماستر والليسانس",
-         "ماستر: 1 نقطة / مذكرة (حد 3 ن) — ليسانس: 0.5 نقطة / موضوع (حد 3 ن).")
+    # ⑩ تأطير الماستر والليسانس
+    _sec("⑩", "تأطير الماستر والليسانس", "ماستر: 1 ن/مذكرة (حد 3) — ليسانس: 0.5 ن/موضوع (حد 3).")
     c1, c2 = st.columns(2)
     with c1:
-        master_n  = st.number_input("عدد مذكرات الماستر المُؤطَّرة", 0, 50, 0, key="tr_master")
-        master_pts= min(master_n * 1.0, 3.0)
-        _score_line("نقاط الماستر", master_pts, 3)
+        master_n   = st.number_input("عدد مذكرات الماستر", 0, 50, 0, key="tr_master")
+        master_pts = min(master_n * 1.0, 3.0)
+        score_line("نقاط الماستر", master_pts, 3)
     with c2:
-        lic_n     = st.number_input("عدد مواضيع الليسانس المُؤطَّرة", 0, 100, 0, key="tr_lic")
-        lic_pts   = min(lic_n * 0.5, 3.0)
-        _score_line("نقاط الليسانس", lic_pts, 3)
+        lic_n   = st.number_input("عدد مواضيع الليسانس", 0, 100, 0, key="tr_lic")
+        lic_pts = min(lic_n * 0.5, 3.0)
+        score_line("نقاط الليسانس", lic_pts, 3)
     st.markdown('</div>', unsafe_allow_html=True)
-    scores["تأطير الماستر"]   = master_pts
-    scores["تأطير الليسانس"] = lic_pts
+    scores["⑩ تأطير الماستر"]   = master_pts
+    scores["⑩ تأطير الليسانس"] = lic_pts
 
-    # ──────────────────────────────────────────────
-    # ⑪⑫ المنصب العالي + التدريس في جذع مشترك — مسقَّف
-    # ──────────────────────────────────────────────
+    # ⑪⑫ أنشطة إضافية
     _sec("⑪⑫", "أنشطة إضافية")
     c1, c2 = st.columns(2)
     with c1:
-        high_ok  = st.checkbox("المنصب العالي (هيكلي/وظيفي) — 2 نقطة", key="tr_high")
-        high_pts = 2.0 if high_ok else 0.0
-        _score_line("المنصب العالي", high_pts, 2)
+        high_ok  = st.checkbox("المنصب العالي — 2 نقطة", key="tr_high")
+        high_pts = 0.0
+        if high_ok:
+            if smart_upload("وثيقة إثبات المنصب", "tr_high_doc", required=True):
+                high_pts = 2.0
+            else:
+                st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لن تُحتسب بدون وثيقة.</div>', unsafe_allow_html=True)
+        score_line("المنصب العالي", high_pts, 2)
     with c2:
         shared_ok  = st.checkbox("التدريس في جذع مشترك — 4 نقاط", key="tr_shared")
         shared_pts = 4.0 if shared_ok else 0.0
-        _score_line("التدريس في جذع مشترك", shared_pts, 4)
+        score_line("الجذع المشترك", shared_pts, 4)
     st.markdown('</div>', unsafe_allow_html=True)
-    scores["المنصب العالي"]            = high_pts
-    scores["التدريس في جذع مشترك"]    = shared_pts
+    scores["⑪ المنصب العالي"]         = high_pts
+    scores["⑫ التدريس في جذع مشترك"] = shared_pts
 
-    # ══════════════════════════════════════════════
-    # ملخص النقاط الكلية
-    # ══════════════════════════════════════════════
+    # ══ ملخص ══
     partial = sum(v for v in scores.values() if v is not None)
 
     st.markdown('<div class="card"><div class="card-title">🏆 ملخص النقاط</div>', unsafe_allow_html=True)
     for label, pts in scores.items():
         if pts is None:
-            st.markdown(
-                f'<div class="score-row"><span>① الرتبة العلمية</span>'
-                f'<span style="color:#c8973a;font-size:.82rem;">⏳ تُحدَّد من اللجنة (7–9 ن)</span></div>',
-                unsafe_allow_html=True)
+            st.markdown(f'<div class="score-row"><span>{label}</span><span style="color:#c8973a;font-size:.82rem;">⏳ اللجنة (3–9 ن)</span></div>', unsafe_allow_html=True)
         else:
-            neg = pts < 0
-            col = "#e74c3c" if neg else "#1a3a5c"
-            st.markdown(
-                f'<div class="score-row"><span>{label}</span>'
-                f'<span style="font-weight:700;color:{col};">{pts:+.1f} ن</span></div>',
-                unsafe_allow_html=True)
+            col = "#e74c3c" if pts < 0 else "#1a3a5c"
+            st.markdown(f'<div class="score-row"><span>{label}</span><span style="font-weight:700;color:{col};">{pts:+.1f} ن</span></div>', unsafe_allow_html=True)
 
-    color = "#27ae60" if partial >= 30 else "#c8973a" if partial >= 15 else "#e74c3c"
+    color = "#27ae60" if partial >= 30 else "#c8973a" if partial >= 0 else "#e74c3c"
     st.markdown(f"""
     <div class="total-box" style="margin-top:.8rem;">
       <div style="color:rgba(255,255,255,.65);font-size:.82rem;">مجموع النقاط الجزئية</div>
       <div class="total-num" style="color:{color};">{partial:.1f}</div>
-      <div style="color:rgba(255,255,255,.5);font-size:.78rem;">+ نقاط الرتبة تُضاف من اللجنة (7–9 ن)</div>
+      <div style="color:rgba(255,255,255,.5);font-size:.78rem;">+ نقاط الرتبة تُضاف من اللجنة</div>
     </div>
     """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # ── الإقرار والتقديم ──────────────────────────
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    if not rank_doc:
-        st.markdown('<div class="alert al-er">❌ لا يمكن التقديم بدون رفع وثيقة آخر ترقية.</div>',
-                    unsafe_allow_html=True)
+    if not rank_ok:
+        st.markdown('<div class="alert al-er">❌ لا يمكن التقديم بدون رفع وثيقة آخر ترقية.</div>', unsafe_allow_html=True)
     decl = st.checkbox("أُقرّ بأن جميع المعلومات المُدرجة صحيحة وكاملة وأتحمل المسؤولية الكاملة.")
-    if st.button("📤 تقديم الملف النهائي",
-                 disabled=not (decl and rank_doc), use_container_width=True):
-        _do_submit(partial, scores, "تربص تحسين المستوى", "submitted_training")
+    if st.button("📤 تقديم الملف النهائي", disabled=not (decl and rank_ok), use_container_width=True):
+        do_submit(partial, scores, SCALE_NAME, SUBMITTED_KEY)
     st.markdown('</div>', unsafe_allow_html=True)
-
-
-def _do_submit(partial, scores, "تربص تحسين المستوى", "submitted_training"):
-    data = {
-        "username":     st.session_state.username,
-        "name":         st.session_state.user_name,
-        "grade":        "مرفوعة — بانتظار اللجنة",
-        "position":     st.session_state.get("department","") or st.session_state.get("position",""),
-        "scale":        "تربص تحسين المستوى",
-        "total_score":  partial,
-        "breakdown":    json.dumps(scores, ensure_ascii=False),
-        "status":       "قيد المراجعة",
-    }
-    with st.spinner("⏳ جارٍ حفظ ملفك..."):
-        saved = False
-        try:
-            from utils.sheets import save_application
-            saved = save_application(data)
-        except Exception:
-            pass
-        if not saved:
-            Path("data/submissions").mkdir(parents=True, exist_ok=True)
-            fname = f"data/submissions/{st.session_state.username}_{datetime.now().strftime('%Y%m%d_%H%M')}.json"
-            with open(fname,"w",encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-    st.balloons()
-    st.markdown(f"""
-    <div class="alert al-ok">
-      ✅ <strong>تم تقديم ملفك بنجاح!</strong><br>
-      مجموع نقاطك الجزئية: <strong>{partial:.1f} نقطة</strong><br>
-      ستُضاف نقاط الرتبة من اللجنة بعد مراجعة الوثيقة.
-    </div>
-    """, unsafe_allow_html=True)
