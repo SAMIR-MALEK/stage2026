@@ -1,41 +1,57 @@
-"""الوثائق الإدارية — تحميل وملء ورفع — لا تدخل في التنقيط"""
+"""الوثائق الإدارية — تحميل مباشر من static/ + رفع"""
 import streamlit as st
+from pathlib import Path
 from utils._shared import smart_upload
 
-DOCS = {
-    "مشروع_العمل":   "https://docs.google.com/document/d/1t6pA-dSzEVTXPBMRzdeuXRNXjKbBI8xL/edit?usp=drive_link&ouid=105750279229933306445&rtpof=true&sd=true",
-    "التعهد":         "https://docs.google.com/document/d/1r_YndFUta_Qt-C-_vNJaDvJi519w5uvA/edit?usp=drive_link&ouid=105750279229933306445&rtpof=true&sd=true",
-    "استمارة_1":      "https://docs.google.com/document/d/13zjo2gqsrauXZkcNlbz3BIiosm5XBQn_/edit?usp=drive_link&ouid=105750279229933306445&rtpof=true&sd=true",
-    "استمارة_2":      "https://docs.google.com/document/d/19AuOB3FBoDjfZDRQx1YgdN51GOLM4aeB/edit?usp=drive_link&ouid=105750279229933306445&rtpof=true&sd=true",
-    "استمارة_3":      "https://docs.google.com/document/d/1vndTjhEYf-rIScWoYbgMRXwRE_Q6wUy2/edit?usp=drive_link&ouid=105750279229933306445&rtpof=true&sd=true",
-    "استمارة_4":      "https://docs.google.com/document/d/1I5XKoVZEM0P9xRcOWqupuk_5gzAd_Sak/edit?usp=drive_link&ouid=105750279229933306445&rtpof=true&sd=true",
-    "التصريح_الشرفي": "https://docs.google.com/document/d/1ERj0fSvlL9i8fxq8muD62D6NFtSK8S-S/edit?usp=drive_link&ouid=105750279229933306445&rtpof=true&sd=true",
+# مسارات الملفات في مجلد static/
+STATIC = Path("static")
+
+FILES = {
+    "1": STATIC / "1.docx",  # مشروع العمل
+    "2": STATIC / "2.docx",  # التعهد
+    "3": STATIC / "3.docx",  # استمارة ترشح صيغة 1
+    "4": STATIC / "4.docx",  # استمارة ترشح صيغة 2
+    "5": STATIC / "5.docx",  # استمارة ترشح صيغة 3
+    "6": STATIC / "6.docx",  # استمارة ترشح صيغة 4
+    "7": STATIC / "7.docx",  # التصريح الشرفي
 }
 
-# (اسم_الوثيقة, مفتاح_النموذج, مفتاح_الرفع)
+FILE_NAMES = {
+    "1": "نموذج_مشروع_العمل.docx",
+    "2": "نموذج_التعهد.docx",
+    "3": "استمارة_ترشح_صيغة1.docx",
+    "4": "استمارة_ترشح_صيغة2.docx",
+    "5": "استمارة_ترشح_صيغة3.docx",
+    "6": "استمارة_ترشح_صيغة4.docx",
+    "7": "نموذج_التصريح_الشرفي.docx",
+}
+
+# الوثائق المطلوبة لكل صيغة: (اسم_العرض, رقم_الملف, مفتاح_الرفع)
 REQUIRED = {
     "form1": [
-        ("استمارة الترشح", "استمارة_1", "adm_f1_istimara"),
-        ("مشروع العمل",    "مشروع_العمل","adm_f1_mashrou3"),
-        ("التعهد",         "التعهد",     "adm_f1_ta3ahod"),
+        ("استمارة الترشح",  "3", "adm_f1_istimara"),
+        ("مشروع العمل",     "1", "adm_f1_mashrou3"),
+        ("التعهد",          "2", "adm_f1_ta3ahod"),
     ],
     "form2": [
-        ("استمارة الترشح", "استمارة_2", "adm_f2_istimara"),
-        ("مشروع العمل",    "مشروع_العمل","adm_f2_mashrou3"),
-        ("التعهد",         "التعهد",     "adm_f2_ta3ahod"),
+        ("استمارة الترشح",  "4", "adm_f2_istimara"),
+        ("مشروع العمل",     "1", "adm_f2_mashrou3"),
+        ("التعهد",          "2", "adm_f2_ta3ahod"),
     ],
     "form3": [
-        ("استمارة الترشح",            "استمارة_3",      "adm_f3_istimara"),
-        ("مشروع العمل",               "مشروع_العمل",    "adm_f3_mashrou3"),
-        ("التعهد",                    "التعهد",          "adm_f3_ta3ahod"),
-        ("التصريح الشرفي (مصادق عليه)","التصريح_الشرفي","adm_f3_tasrih"),
+        ("استمارة الترشح",              "5", "adm_f3_istimara"),
+        ("مشروع العمل",                 "1", "adm_f3_mashrou3"),
+        ("التعهد",                      "2", "adm_f3_ta3ahod"),
+        ("التصريح الشرفي (مصادق عليه)", "7", "adm_f3_tasrih"),
     ],
     "form4": [
-        ("استمارة الترشح", "استمارة_4", "adm_f4_istimara"),
-        ("مشروع العمل",    "مشروع_العمل","adm_f4_mashrou3"),
-        ("التعهد",         "التعهد",     "adm_f4_ta3ahod"),
+        ("استمارة الترشح",  "6", "adm_f4_istimara"),
+        ("مشروع العمل",     "1", "adm_f4_mashrou3"),
+        ("التعهد",          "2", "adm_f4_ta3ahod"),
     ],
 }
+
+MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
 def show_admin_docs(form_key: str) -> bool:
@@ -44,33 +60,46 @@ def show_admin_docs(form_key: str) -> bool:
     if not docs:
         return True
 
-    st.markdown('<div class="card"><div class="card-title">📋 الوثائق الإدارية المطلوبة</div>', unsafe_allow_html=True)
+    st.markdown('<div class="card"><div class="card-title">📋 الوثائق الإدارية المطلوبة</div>',
+                unsafe_allow_html=True)
     st.markdown("""
     <div class="alert al-in">
-      الخطوات: <strong>① حمّل النموذج</strong> ← <strong>② املأه</strong> ← <strong>③ ارفعه</strong><br>
+      <strong>① حمّل النموذج</strong> ← <strong>② املأه</strong> ← <strong>③ ارفعه</strong><br>
       <small>هذه الوثائق إلزامية ولا تدخل في حساب النقاط.</small>
     </div>
     """, unsafe_allow_html=True)
 
     all_ok = True
-    for label, doc_key, skey in docs:
-        link = DOCS.get(doc_key, "")
-        st.markdown(f'<div class="item-block">', unsafe_allow_html=True)
+    for label, file_num, skey in docs:
+        fpath     = FILES.get(file_num)
+        fname     = FILE_NAMES.get(file_num, f"{file_num}.docx")
+
+        st.markdown('<div class="item-block">', unsafe_allow_html=True)
         c1, c2 = st.columns([3, 3])
+
         with c1:
             st.markdown(f"**📄 {label}**")
-            if link:
+            # زر تحميل مباشر من الملف المحلي
+            if fpath and fpath.exists():
+                with open(fpath, "rb") as f:
+                    st.download_button(
+                        label    = "⬇️ تحميل النموذج (.docx)",
+                        data     = f.read(),
+                        file_name= fname,
+                        mime     = MIME,
+                        key      = f"dl_{skey}",
+                    )
+            else:
                 st.markdown(
-                    f'<a href="{link}" target="_blank" style="'
-                    f'display:inline-block;padding:5px 14px;background:#1a3a5c;color:white;'
-                    f'border-radius:6px;font-size:.82rem;text-decoration:none;margin-top:4px;">'
-                    f'⬇️ تحميل النموذج الفارغ</a>',
+                    f'<span style="color:#e74c3c;font-size:.8rem;">⚠️ الملف غير موجود: static/{file_num}.docx</span>',
                     unsafe_allow_html=True
                 )
+
         with c2:
             has = smart_upload(f"رفع {label} بعد التعبئة", skey, required=True)
             if not has:
                 all_ok = False
+
         st.markdown('</div>', unsafe_allow_html=True)
 
     if not all_ok:
