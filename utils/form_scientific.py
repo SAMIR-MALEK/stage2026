@@ -70,12 +70,13 @@ def show_form():
     # ② التسجيل المنتظم: غير مطلوب للأساتذة المحاضرين
 
     # ③ الاستفادات السابقة
-    _sec("③", "الاستفادات السابقة", "الصيغة: <strong>n − 3</strong> حيث n = عدد الاستفادات السابقة.")
-    prev_n   = st.number_input("عدد الاستفادات السابقة", 0, 15, 0, key="tr_prev")
-    prev_pts = float(prev_n - 3)
-    if prev_pts < 0:
-        st.markdown(f'<div class="alert al-wn">الخصم: {prev_pts:.1f} نقطة (n − 3 = {prev_n} − 3)</div>', unsafe_allow_html=True)
-    score_line("خصم الاستفادات", prev_pts)
+    _sec("③", "الاستفادات السابقة",
+         "3 نقاط إذا لم تستفد — تنقص نقطة لكل استفادة — حد أقصى 3 استفادات.")
+    prev_n   = st.number_input("عدد الاستفادات في الثلاث سنوات الأخيرة",
+                                min_value=0, max_value=3, value=0,
+                                key="tr_prev_1")
+    prev_pts = max(3.0 - prev_n, 0.0)   # لا تقل عن 0 أبداً
+    score_line("نقاط الاستفادات", prev_pts, 3)
     st.markdown('</div>', unsafe_allow_html=True)
     scores["③ الاستفادات السابقة"] = prev_pts
 
@@ -228,12 +229,22 @@ def show_form():
     _sec("⑩", "تأطير الماستر والليسانس", "ماستر: 1 ن/مذكرة (حد 3) — ليسانس: 0.5 ن/موضوع (حد 3).")
     c1, c2 = st.columns(2)
     with c1:
-        master_n   = st.number_input("عدد مذكرات الماستر", 0, 50, 0, key="tr_master")
-        master_pts = min(master_n * 1.0, 3.0)
+        master_n   = st.number_input("عدد مذكرات الماستر", 0, 50, 0, key="tr_master_1")
+        master_pts = 0.0
+        if master_n > 0:
+            if smart_upload(f"محاضر مناقشة الماستر (ملف واحد لكل المذكرات)", f"tr_master_doc_1", required=True):
+                master_pts = min(master_n * 1.0, 3.0)
+            else:
+                st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ ارفع محاضر المناقشة في ملف واحد.</div>', unsafe_allow_html=True)
         score_line("نقاط الماستر", master_pts, 3)
     with c2:
-        lic_n   = st.number_input("عدد مواضيع الليسانس", 0, 100, 0, key="tr_lic")
-        lic_pts = min(lic_n * 0.5, 3.0)
+        lic_n   = st.number_input("عدد مواضيع الليسانس", 0, 100, 0, key="tr_lic_1")
+        lic_pts = 0.0
+        if lic_n > 0:
+            if smart_upload("وثيقة إثبات من رئيس القسم (تأطير الليسانس)", f"tr_lic_doc_1", required=True):
+                lic_pts = min(lic_n * 0.5, 3.0)
+            else:
+                st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ ارفع وثيقة الإثبات من رئيس القسم.</div>', unsafe_allow_html=True)
         score_line("نقاط الليسانس", lic_pts, 3)
     st.markdown('</div>', unsafe_allow_html=True)
     scores["⑩ تأطير الماستر"]   = master_pts
@@ -252,8 +263,13 @@ def show_form():
                 st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لن تُحتسب بدون وثيقة.</div>', unsafe_allow_html=True)
         score_line("المنصب العالي", high_pts, 2)
     with c2:
-        shared_ok  = st.checkbox("التدريس في جذع مشترك — 4 نقاط", key="tr_shared")
-        shared_pts = 4.0 if shared_ok else 0.0
+        shared_ok  = st.checkbox("التدريس في جذع مشترك — 4 نقاط", key="tr_shared_1")
+        shared_pts = 0.0
+        if shared_ok:
+            if smart_upload("وثيقة إثبات التدريس في جذع مشترك", f"tr_shared_doc_1", required=True):
+                shared_pts = 4.0
+            else:
+                st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لن تُحتسب بدون وثيقة.</div>', unsafe_allow_html=True)
         score_line("الجذع المشترك", shared_pts, 4)
     st.markdown('</div>', unsafe_allow_html=True)
     scores["⑪ المنصب العالي"]         = high_pts
