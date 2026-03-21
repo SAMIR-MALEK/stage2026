@@ -44,16 +44,20 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-for k,v in {"logged_in":False,"role":None,"user_name":"","username":"",
-             "grade":"","years":0,"position":"","department":"","scale":""}.items():
+# تهيئة الجلسة
+for k,v in {
+    "logged_in":False,"role":None,"user_name":"","username":"",
+    "silk":"","rank":"","grade":0,"years":0,
+}.items():
     if k not in st.session_state: st.session_state[k]=v
 
+# توجيه الصفحات
 if not st.session_state.logged_in:
     from utils.login import show_login
     show_login()
 else:
-    role  = st.session_state.role
-    scale = st.session_state.scale
+    role = st.session_state.role
+    silk = st.session_state.silk
 
     if role == "committee":
         from utils.committee import show_committee
@@ -64,22 +68,27 @@ else:
         show_admin()
 
     elif role == "employee":
-        # ── توجيه حسب السلم ──────────────────────
-        if scale == "الموظفون الإداريون والتقنيون":
-            from utils.form_admin_staff import show_form
-            show_form()
-
-        elif scale == "تربص تحسين المستوى":
-            from utils.form_training import show_form
-            show_form()
-
-        elif scale == "الإقامة العلمية قصيرة المدى":
+        # ── توجيه حسب السلك ──────────────────────────
+        if silk == "أساتذة محاضرون":
+            # صيغة 1: إقامة علمية قصيرة المدى
             from utils.form_scientific import show_form
             show_form()
 
-        elif scale == "الباحثون الدائمون":
+        elif silk == "أساتذة مساعدون":
+            # صيغة 2: تداريب تحسين المستوى
+            from utils.form_training import show_form
+            show_form()
+
+        elif silk == "طلبة دكتوراه":
+            # صيغة 3: تربصات للباحثين
             from utils.form_researcher import show_form
             show_form()
 
+        elif silk == "إداريون وتقنيون":
+            # صيغة 4: تربصات تحسين المستوى
+            from utils.form_admin_staff import show_form
+            show_form()
+
         else:
-            st.warning(f"السلم '{scale}' غير معرَّف في النظام. تواصل مع الإدارة.")
+            st.markdown(f'<div class="alert al-er">❌ السلك "{silk}" غير معرَّف. تواصل مع الإدارة.</div>',
+                        unsafe_allow_html=True)
