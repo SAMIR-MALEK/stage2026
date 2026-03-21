@@ -316,7 +316,7 @@ def show_form():
                     unsafe_allow_html=True)
     decl = st.checkbox("أُقرّ بأن جميع المعلومات المُدرجة صحيحة وكاملة وأتحمل المسؤولية الكاملة.")
     if st.button("📤 تقديم الملف النهائي",
-                 disabled=not (decl and rank_ok),
+                 disabled=not (decl and rank_ok and admin_docs_ok),
                  use_container_width=True):
         breakdown = {
             "الأقدمية": seniority_pts, "اللغات": lang_pts,

@@ -1,12 +1,13 @@
 """نموذج التقديم — سلم الإقامة العلمية قصيرة المدى"""
 import streamlit as st
+from utils.admin_docs import show_admin_docs
 from utils._shared import smart_upload, score_line, item_pts, do_submit, show_submitted
 
 ARTICLE_PTS = {"A+": 20, "A": 15, "B": 10, "C (وطني)": 5}
 INTERV_PTS  = {"دولية مفهرسة (Scopus/WOS)": 4, "دولية غير مفهرسة": 2, "وطنية": 1}
 PROJECT_PTS = {"دولي (Erasmus+, PRIMA, Horizon...)": 10, "وطني (PNR, PRFU...)": 5}
 SUPERV_PTS  = {"مشرف رئيسي": 5, "مشرف مشارك": 3, "عضو لجنة مناقشة": 1}
-SUBMITTED_KEY = "submitted_scientific"
+SUBMITTED_KEY = "submitted_form1"
 SCALE_NAME    = "الإقامة العلمية قصيرة المدى"
 
 
@@ -49,6 +50,10 @@ def show_form():
     if st.session_state.get(SUBMITTED_KEY):
         show_submitted()
         return
+
+    # الوثائق الإدارية
+    admin_docs_ok = show_admin_docs("form1")
+    st.markdown("---")
 
     for lst in ["tr_articles","tr_interventions","tr_patents","tr_projects","tr_supervisions"]:
         if lst not in st.session_state: st.session_state[lst] = []
@@ -289,6 +294,6 @@ def show_form():
     if not rank_ok:
         st.markdown('<div class="alert al-er">❌ لا يمكن التقديم بدون رفع وثيقة آخر ترقية.</div>', unsafe_allow_html=True)
     decl = st.checkbox("أُقرّ بأن جميع المعلومات المُدرجة صحيحة وكاملة وأتحمل المسؤولية الكاملة.")
-    if st.button("📤 تقديم الملف النهائي", disabled=not (decl and rank_ok), use_container_width=True):
+    if st.button("📤 تقديم الملف النهائي", disabled=not (decl and rank_ok and admin_docs_ok), use_container_width=True):
         do_submit(partial, scores, SCALE_NAME, SUBMITTED_KEY)
     st.markdown('</div>', unsafe_allow_html=True)
