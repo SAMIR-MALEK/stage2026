@@ -80,11 +80,11 @@ def show_form():
     scores["② التسجيل المنتظم"] = reg_pts
 
     # ③ الاستفادات السابقة
-    _sec("③", "الاستفادات السابقة", "يُخصم 5 نقاط لكل استفادة في آخر 6 سنوات.")
+    _sec("③", "الاستفادات السابقة", "الصيغة: <strong>n − 3</strong> حيث n = عدد الاستفادات السابقة.")
     prev_n   = st.number_input("عدد الاستفادات السابقة", 0, 15, 0, key="tr_prev")
-    prev_pts = float(prev_n * -5)
+    prev_pts = float(prev_n - 3)
     if prev_pts < 0:
-        st.markdown(f'<div class="alert al-wn">سيُخصم: {abs(prev_pts):.0f} نقطة</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="alert al-wn">الخصم: {prev_pts:.1f} نقطة (n − 3)</div>', unsafe_allow_html=True)
     score_line("خصم الاستفادات", prev_pts)
     st.markdown('</div>', unsafe_allow_html=True)
     scores["③ الاستفادات السابقة"] = prev_pts

@@ -67,24 +67,14 @@ def show_form():
     st.markdown('</div>', unsafe_allow_html=True)
     scores["① الرتبة العلمية"] = None
 
-    # ② التسجيل المنتظم
-    _sec("②", "التسجيل المنتظم", "2 نقطة لكل سنة تسجيل.")
-    c1, c2 = st.columns(2)
-    with c1:
-        reg = st.number_input("عدد سنوات التسجيل", 0, 10, 0, key="tr_reg")
-    with c2:
-        smart_upload("وثيقة التسجيل", "tr_reg_doc", required=reg > 0)
-    reg_pts = reg * 2.0
-    score_line("نقاط التسجيل", reg_pts)
-    st.markdown('</div>', unsafe_allow_html=True)
-    scores["② التسجيل المنتظم"] = reg_pts
+    # ② التسجيل المنتظم: غير مطلوب للأساتذة المحاضرين
 
     # ③ الاستفادات السابقة
-    _sec("③", "الاستفادات السابقة", "يُخصم 5 نقاط لكل استفادة في آخر 6 سنوات.")
+    _sec("③", "الاستفادات السابقة", "الصيغة: <strong>n − 3</strong> حيث n = عدد الاستفادات السابقة.")
     prev_n   = st.number_input("عدد الاستفادات السابقة", 0, 15, 0, key="tr_prev")
-    prev_pts = float(prev_n * -5)
+    prev_pts = float(prev_n - 3)
     if prev_pts < 0:
-        st.markdown(f'<div class="alert al-wn">سيُخصم: {abs(prev_pts):.0f} نقطة</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="alert al-wn">الخصم: {prev_pts:.1f} نقطة (n − 3 = {prev_n} − 3)</div>', unsafe_allow_html=True)
     score_line("خصم الاستفادات", prev_pts)
     st.markdown('</div>', unsafe_allow_html=True)
     scores["③ الاستفادات السابقة"] = prev_pts
