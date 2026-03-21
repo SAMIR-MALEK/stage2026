@@ -26,7 +26,7 @@ def _header():
       <p>كلية الحقوق والعلوم السياسية — جامعة محمد البشير الإبراهيمي برج بوعريريج</p>
       <div style="margin-top:.5rem;">
         <span class="badge b-blue">{st.session_state.user_name}</span>
-        <span class="badge b-gold">{st.session_state.position}</span>
+        <span class="badge b-gold">{st.session_state.get("rank","")}</span>
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -352,7 +352,7 @@ def _submit(partial, breakdown):
             "username":    st.session_state.username,
             "name":        st.session_state.user_name,
             "grade":       "مرفوعة — بانتظار اللجنة",
-            "position":    st.session_state.position,
+            "position":    st.session_state.get("rank",""),
             "scale":       "الموظفون الإداريون والتقنيون",
             "total_score": partial,
             "breakdown":   json.dumps(breakdown, ensure_ascii=False),

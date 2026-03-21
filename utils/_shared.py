@@ -142,7 +142,7 @@ def do_submit(partial, scores, scale_name, submitted_key):
             "username":    st.session_state.username,
             "name":        st.session_state.user_name,
             "grade":       "مرفوعة — بانتظار اللجنة",
-            "position":    st.session_state.get("department","") or st.session_state.get("position",""),
+            "position":    st.session_state.get('rank',''),
             "scale":       scale_name,
             "total_score": partial,
             "breakdown":   json.dumps(scores, ensure_ascii=False),
