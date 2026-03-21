@@ -23,7 +23,7 @@ def _header():
       <h1>📋 طلب الانتقاء — الإقامة العلمية قصيرة المدى</h1>
       <p>كلية الحقوق والعلوم السياسية — جامعة محمد البشير الإبراهيمي برج بوعريريج</p>
       <div style="margin-top:.5rem;">
-        <span class="badge b-blue">{st.session_state.user_name}</span>
+        <span class="badge b-blue">{st.session_state.get('user_name','')}</span>
         <span class="badge b-gold">{st.session_state.get('grade','')}</span>
       </div>
     </div>

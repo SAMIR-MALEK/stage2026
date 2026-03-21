@@ -17,6 +17,9 @@ def _logout():
 
 
 def _header():
+    name = st.session_state.get("user_name", "")
+    rank = st.session_state.get("rank", "")
+    silk = st.session_state.get("silk", "")
     st.markdown(f"""
     <div class="gov-header">
       <div style="font-size:.74rem;opacity:.6;margin-bottom:.2rem;">
@@ -25,8 +28,9 @@ def _header():
       <h1>📋 طلب الانتقاء — الموظفون الإداريون والتقنيون</h1>
       <p>كلية الحقوق والعلوم السياسية — جامعة محمد البشير الإبراهيمي برج بوعريريج</p>
       <div style="margin-top:.5rem;">
-        <span class="badge b-blue">{st.session_state.user_name}</span>
-        <span class="badge b-gold">{st.session_state.get("rank","")}</span>
+        <span class="badge b-blue">{name}</span>
+        <span class="badge b-gold">{rank}</span>
+        <span class="badge b-green">{silk}</span>
       </div>
     </div>
     """, unsafe_allow_html=True)
