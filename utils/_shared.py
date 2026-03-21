@@ -1,5 +1,67 @@
 """دوال مشتركة بين جميع نماذج التقديم"""
 import streamlit as st
+
+# قاموس أسماء الوثائق الواضحة
+DOC_LABELS = {
+    # سلم الموظفين
+    "rank_doc":       "وثيقة_الرتبة_الوظيفية",
+    "sen_doc":        "وثيقة_الخدمة",
+    "lang_doc":       "وثيقة_لغة_التكوين",
+    "eng_doc":        "شهادة_الإنجليزية",
+    "min_doc":        "وثيقة_المشروع_الوزاري",
+    "high_doc":       "وثيقة_المنصب_العالي",
+    # سلم الأساتذة
+    "tr_rank":        "وثيقة_الرتبة_العلمية",
+    "tr_reg_doc":     "وثيقة_التسجيل",
+    "tr_award_doc":   "وثيقة_الجائزة",
+    "tr_high_doc":    "وثيقة_المنصب_العالي",
+    # مقالات
+    "tr_art_pdf_0":   "مقال_1",
+    "tr_art_pdf_1":   "مقال_2",
+    "tr_art_pdf_2":   "مقال_3",
+    "sc_art_pdf_0":   "مقال_1",
+    "sc_art_pdf_1":   "مقال_2",
+    # مداخلات
+    "tr_int_cert_0":  "شهادة_مداخلة_1",
+    "tr_int_cert_1":  "شهادة_مداخلة_2",
+    "tr_int_cert_2":  "شهادة_مداخلة_3",
+    "sc_int_cert_0":  "شهادة_مداخلة_1",
+    "sc_int_cert_1":  "شهادة_مداخلة_2",
+    # براءات
+    "tr_pat_cert_0":  "براءة_اختراع_1",
+    "tr_pat_cert_1":  "براءة_اختراع_2",
+    "sc_lbl_cert_0":  "وسم_مشروع_1",
+    # مشاريع
+    "tr_proj_cert_0": "وثيقة_مشروع_1",
+    "tr_proj_cert_1": "وثيقة_مشروع_2",
+    "sc_proj_cert_0": "وثيقة_مشروع_1",
+    # إشراف
+    "tr_sup_cert_0":  "محضر_دكتوراه_1",
+    "tr_sup_cert_1":  "محضر_دكتوراه_2",
+    "sc_sup_cert_0":  "محضر_دكتوراه_1",
+    "sc_law_cert_0":  "وثيقة_قرار_1275_1",
+    # دراسات
+    "sc_natl_cert_0": "دراسة_وطنية_1",
+    "sc_intl_cert_0": "دراسة_دولية_1",
+    # هيئات
+    "body_cert_0":    "شهادة_هيئة_1",
+    "body_cert_1":    "شهادة_هيئة_2",
+    "iproj_cert_0":   "شهادة_مشروع_دولي_1",
+    # باحثون
+    "rs_rank":        "وثيقة_الرتبة",
+    "rs_phd_doc":     "وثيقة_تسجيل_دكتوراه",
+    "rs_award_doc":   "وثيقة_الجائزة",
+    "rs_pat_cert_0":  "براءة_اختراع_1",
+    "rs_int_cert_0":  "شهادة_مداخلة_1",
+    "rs_proj_cert_0": "وثيقة_مشروع_1",
+    "rs_natl_cert_0": "دراسة_وطنية_1",
+    "rs_intl_cert_0": "دراسة_دولية_1",
+}
+
+def get_doc_label(skey: str) -> str:
+    """إعادة اسم واضح للوثيقة"""
+    return DOC_LABELS.get(skey, skey.replace("_", " "))
+
 import json
 from datetime import datetime
 from pathlib import Path
@@ -17,6 +79,7 @@ def smart_upload(label, skey, required=True):
         data = uploaded.read()
         st.session_state[f"file_{skey}"] = {
             "name":    uploaded.name,
+            "label":   get_doc_label(skey),
             "content": data,
             "mime":    uploaded.type,
             "size":    len(data),

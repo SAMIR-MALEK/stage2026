@@ -1,10 +1,5 @@
 """
-لوحة لجنة الانتقاء — كاملة
-- عرض كل المترشحين مرتبين بالنقاط
-- إضافة نقاط الرتبة يدوياً
-- تغيير الحالة (مقبول/مرفوض/قائمة انتظار)
-- عرض تفاصيل كل ملف
-- تصدير القائمة النهائية CSV + Excel
+لوحة لجنة الانتقاء — مع روابط Drive مباشرة
 """
 import streamlit as st
 import pandas as pd
@@ -13,10 +8,10 @@ from pathlib import Path
 from datetime import datetime
 
 RANK_SCORE_RANGES = {
-    "الموظفون الإداريون والتقنيون":               (8.0, 12.0),
-    "تربص تحسين المستوى":                         (3.0,  9.0),
-    "الإقامة العلمية قصيرة المدى":                (3.0,  9.0),
-    "التربصات قصيرة المدى للباحثين الدائمين":     (0.0,  0.0),
+    "الموظفون الإداريون والتقنيون":              (8.0, 12.0),
+    "تربص تحسين المستوى":                        (3.0,  9.0),
+    "الإقامة العلمية قصيرة المدى":               (3.0,  9.0),
+    "التربصات قصيرة المدى للباحثين الدائمين":   (0.0,  0.0),
 }
 STATUS_OPTIONS = ["قيد المراجعة", "مقبول", "مرفوض", "قائمة انتظار"]
 
@@ -62,13 +57,12 @@ def _normalize(raw: list[dict]) -> pd.DataFrame:
             "الحالة":         r.get("status",        r.get("الحالة", "قيد المراجعة")),
             "التاريخ":        r.get("التاريخ",       ""),
             "التفصيل":        r.get("breakdown",     r.get("تفصيل_النقاط", "{}")),
-            "_file":          r.get("_file",         ""),
+            "روابط_Drive":    r.get("drive_links",   r.get("روابط_الوثائق", "{}")),
         })
     return pd.DataFrame(rows) if rows else pd.DataFrame()
 
 
 def _save(username: str, rank_pts: float, status: str) -> bool:
-    # Google Sheets
     try:
         from utils.sheets import _get_client, SHEET_NAME
         cl = _get_client()
@@ -86,7 +80,6 @@ def _save(username: str, rank_pts: float, status: str) -> bool:
                     return True
     except Exception:
         pass
-    # محلي
     sub = Path("data/submissions")
     if sub.exists():
         for f in sub.glob(f"{username}_*.json"):
@@ -101,12 +94,6 @@ def _save(username: str, rank_pts: float, status: str) -> bool:
     return False
 
 
-def _item_pts_badge(pts):
-    col = "#e74c3c" if float(pts) < 0 else "#1a3a5c"
-    return f'<span style="font-weight:700;color:{col};">{float(pts):+.1f} ن</span>'
-
-
-# ══════════════════════════════════════════════════
 def show_committee():
     st.markdown(f"""
     <div class="gov-header">
@@ -128,8 +115,7 @@ def show_committee():
         df  = _normalize(raw)
 
     if df.empty:
-        st.markdown('<div class="alert al-in">📭 لا توجد ملفات مقدَّمة بعد.</div>',
-                    unsafe_allow_html=True)
+        st.markdown('<div class="alert al-in">📭 لا توجد ملفات مقدَّمة بعد.</div>', unsafe_allow_html=True)
         return
 
     tab1, tab2, tab3, tab4 = st.tabs([
@@ -139,26 +125,23 @@ def show_committee():
         "📥 تصدير"
     ])
 
-    # ════ تبويب 1: القائمة ════════════════════════
+    # ════ تبويب 1 ════
     with tab1:
         c1,c2,c3,c4 = st.columns(4)
-        metrics = [
-            (len(df),                                  "#1a3a5c", "إجمالي الملفات"),
-            (len(df[df["الحالة"]=="مقبول"]),          "#27ae60", "مقبول"),
-            (len(df[df["الحالة"]=="قيد المراجعة"]),   "#c8973a", "قيد المراجعة"),
-            (len(df[df["نقاط_الرتبة"]==0]),           "#e74c3c", "بدون نقاط رتبة"),
-        ]
-        for col, (val, color, label) in zip([c1,c2,c3,c4], metrics):
+        for col, (val, color, label) in zip(
+            [c1,c2,c3,c4],
+            [(len(df),"#1a3a5c","إجمالي الملفات"),
+             (len(df[df["الحالة"]=="مقبول"]),"#27ae60","مقبول"),
+             (len(df[df["الحالة"]=="قيد المراجعة"]),"#c8973a","قيد المراجعة"),
+             (len(df[df["نقاط_الرتبة"]==0]),"#e74c3c","بدون نقاط رتبة")]
+        ):
             with col:
-                st.markdown(
-                    f'<div class="card"><div style="font-size:1.8rem;font-weight:800;color:{color};">{val}</div>'
-                    f'<div style="font-size:.82rem;color:#6b7f96;">{label}</div></div>',
-                    unsafe_allow_html=True)
+                st.markdown(f'<div class="card"><div style="font-size:1.8rem;font-weight:800;color:{color};">{val}</div><div style="font-size:.82rem;color:#6b7f96;">{label}</div></div>', unsafe_allow_html=True)
 
-        scales   = ["الكل"] + sorted(df["السلم"].dropna().unique().tolist())
-        sel_scale= st.selectbox("تصفية حسب السلم:", scales)
-        filtered = (df if sel_scale=="الكل" else df[df["السلم"]==sel_scale]).copy()
-        filtered = filtered.sort_values("النقاط_الكلية", ascending=False).reset_index(drop=True)
+        scales    = ["الكل"] + sorted(df["السلم"].dropna().unique().tolist())
+        sel_scale = st.selectbox("تصفية حسب السلم:", scales)
+        filtered  = (df if sel_scale=="الكل" else df[df["السلم"]==sel_scale]).copy()
+        filtered  = filtered.sort_values("النقاط_الكلية", ascending=False).reset_index(drop=True)
         filtered.index += 1
 
         def _color(val):
@@ -169,10 +152,8 @@ def show_committee():
             return m.get(val,"")
 
         show_cols = ["الاسم_الكامل","السلم","النقاط_الجزئية","نقاط_الرتبة","النقاط_الكلية","الحالة"]
-        st.dataframe(
-            filtered[show_cols].style.applymap(_color, subset=["الحالة"]),
-            use_container_width=True, height=380
-        )
+        st.dataframe(filtered[show_cols].style.applymap(_color, subset=["الحالة"]),
+                     use_container_width=True, height=380)
 
         st.markdown("---")
         names    = ["—"] + filtered["الاسم_الكامل"].tolist()
@@ -180,27 +161,22 @@ def show_committee():
         if sel_name != "—":
             _detail(filtered[filtered["الاسم_الكامل"]==sel_name].iloc[0])
 
-    # ════ تبويب 2: نقاط الرتبة ═══════════════════
+    # ════ تبويب 2 ════
     with tab2:
-        st.markdown('<div class="alert al-wn">راجع وثيقة آخر ترقية ثم أدخل نقاط الرتبة.</div>',
-                    unsafe_allow_html=True)
+        st.markdown('<div class="alert al-wn">راجع وثيقة آخر ترقية ثم أدخل نقاط الرتبة.</div>', unsafe_allow_html=True)
         needs = df[df["نقاط_الرتبة"]==0].copy()
-
         if needs.empty:
-            st.markdown('<div class="alert al-ok">✅ تمت إضافة نقاط الرتبة لجميع المترشحين.</div>',
-                        unsafe_allow_html=True)
+            st.markdown('<div class="alert al-ok">✅ تمت إضافة نقاط الرتبة لجميع المترشحين.</div>', unsafe_allow_html=True)
         else:
             for _, row in needs.iterrows():
                 scale = row["السلم"]
                 rng   = RANK_SCORE_RANGES.get(scale, (0, 12))
                 has   = rng[1] > 0
-
                 st.markdown('<div class="item-block">', unsafe_allow_html=True)
                 c1,c2,c3,c4 = st.columns([3,2,1.5,1.5])
                 with c1:
                     st.markdown(f"**{row['الاسم_الكامل']}**")
-                    st.markdown(f'<span style="font-size:.8rem;color:#6b7f96;">{scale}</span>',
-                                unsafe_allow_html=True)
+                    st.markdown(f'<span style="font-size:.8rem;color:#6b7f96;">{scale}</span>', unsafe_allow_html=True)
                 with c2:
                     st.markdown(f"نقاط جزئية: **{row['النقاط_الجزئية']:.1f}**")
                 with c3:
@@ -213,41 +189,27 @@ def show_committee():
                     ) if has else 0.0
                 with c4:
                     total = row["النقاط_الجزئية"] + rank_val
-                    st.markdown(f'<div style="font-weight:800;color:#1a3a5c;font-size:1.1rem;text-align:center;">= {total:.1f} ن</div>',
-                                unsafe_allow_html=True)
+                    st.markdown(f'<div style="font-weight:800;color:#1a3a5c;font-size:1.1rem;text-align:center;">= {total:.1f} ن</div>', unsafe_allow_html=True)
                     if st.button("💾 حفظ", key=f"sv_{row['اسم_المستخدم']}", use_container_width=True):
                         if _save(row["اسم_المستخدم"], rank_val, row["الحالة"]):
                             st.success("✅"); st.rerun()
-                        else:
-                            st.error("❌ فشل الحفظ")
+                        else: st.error("❌")
                 st.markdown('</div>', unsafe_allow_html=True)
 
-    # ════ تبويب 3: النتائج ════════════════════════
+    # ════ تبويب 3 ════
     with tab3:
-        st.markdown('<div class="alert al-in">حدّد نتيجة كل مترشح بعد مراجعة ملفه.</div>',
-                    unsafe_allow_html=True)
+        st.markdown('<div class="alert al-in">حدّد نتيجة كل مترشح بعد مراجعة ملفه.</div>', unsafe_allow_html=True)
         df_s = df.sort_values("النقاط_الكلية", ascending=False).reset_index(drop=True)
-
         for idx, row in df_s.iterrows():
             c1,c2,c3,c4 = st.columns([3,1.5,2,1.5])
             with c1:
-                st.markdown(
-                    f'<div style="font-weight:600;">'
-                    f'<span style="color:#1a3a5c;margin-left:.4rem;">#{idx+1}</span>'
-                    f'{row["الاسم_الكامل"]}'
-                    f'<br><span style="font-size:.78rem;color:#6b7f96;">{row["السلم"]}</span></div>',
-                    unsafe_allow_html=True)
+                st.markdown(f'<div style="font-weight:600;">#{idx+1} {row["الاسم_الكامل"]}<br><span style="font-size:.78rem;color:#6b7f96;">{row["السلم"]}</span></div>', unsafe_allow_html=True)
             with c2:
-                st.markdown(
-                    f'<div style="text-align:center;">'
-                    f'<div style="font-size:1.4rem;font-weight:800;color:#1a3a5c;">{row["النقاط_الكلية"]:.1f}</div>'
-                    f'<div style="font-size:.72rem;color:#6b7f96;">نقطة</div></div>',
-                    unsafe_allow_html=True)
+                st.markdown(f'<div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;color:#1a3a5c;">{row["النقاط_الكلية"]:.1f}</div><div style="font-size:.72rem;color:#6b7f96;">نقطة</div></div>', unsafe_allow_html=True)
             with c3:
                 cur_idx = STATUS_OPTIONS.index(row["الحالة"]) if row["الحالة"] in STATUS_OPTIONS else 0
                 new_st  = st.selectbox("النتيجة", STATUS_OPTIONS, index=cur_idx,
-                                       key=f"st_{row['اسم_المستخدم']}_{idx}",
-                                       label_visibility="collapsed")
+                                       key=f"st_{row['اسم_المستخدم']}_{idx}", label_visibility="collapsed")
             with c4:
                 if st.button("💾", key=f"svst_{row['اسم_المستخدم']}_{idx}", use_container_width=True):
                     if _save(row["اسم_المستخدم"], row["نقاط_الرتبة"], new_st):
@@ -262,27 +224,24 @@ def show_committee():
                 if _save(row["اسم_المستخدم"], row["نقاط_الرتبة"], st_val): n += 1
             st.success(f"✅ تم حفظ {n} نتيجة"); st.rerun()
 
-    # ════ تبويب 4: تصدير ══════════════════════════
+    # ════ تبويب 4 ════
     with tab4:
         ex = df.sort_values("النقاط_الكلية", ascending=False).reset_index(drop=True)
         ex.index += 1; ex.index.name = "الترتيب"
         show = ["الاسم_الكامل","السلم","النقاط_الجزئية","نقاط_الرتبة","النقاط_الكلية","الحالة"]
         st.dataframe(ex[show], use_container_width=True)
-
         c1,c2 = st.columns(2)
         with c1:
-            st.download_button(
-                "📥 تحميل CSV",
-                data=ex[show].to_csv(encoding="utf-8-sig", index=True).encode("utf-8-sig"),
+            st.download_button("📥 تحميل CSV",
+                data=ex[show].to_csv(encoding="utf-8-sig",index=True).encode("utf-8-sig"),
                 file_name=f"المترشحون_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime="text/csv", use_container_width=True
-            )
+                mime="text/csv", use_container_width=True)
         with c2:
             try:
                 import io, openpyxl
                 from openpyxl.styles import Font, PatternFill, Alignment
                 from openpyxl.utils import get_column_letter
-                wb  = openpyxl.Workbook(); ws = wb.active; ws.title = "قائمة المترشحين"
+                wb = openpyxl.Workbook(); ws = wb.active; ws.title = "قائمة المترشحين"
                 hdrs = ["الترتيب"] + show
                 for ci, h in enumerate(hdrs, 1):
                     c = ws.cell(1, ci, h)
@@ -290,31 +249,27 @@ def show_committee():
                     c.fill = PatternFill("solid", fgColor="1A3A5C")
                     c.alignment = Alignment(horizontal="center", vertical="center")
                     ws.column_dimensions[get_column_letter(ci)].width = [8,26,30,14,14,14,14][ci-1]
-                STATUS_FILL = {"مقبول":"E8F8F0","مرفوض":"FDECEA",
-                               "قائمة انتظار":"E6F1FB","قيد المراجعة":"FEF9EC"}
+                STATUS_FILL = {"مقبول":"E8F8F0","مرفوض":"FDECEA","قائمة انتظار":"E6F1FB","قيد المراجعة":"FEF9EC"}
                 for ri, (i, row) in enumerate(ex.iterrows(), 2):
-                    vals = [i, row["الاسم_الكامل"], row["السلم"],
-                            row["النقاط_الجزئية"], row["نقاط_الرتبة"],
-                            row["النقاط_الكلية"], row["الحالة"]]
-                    fc = PatternFill("solid", fgColor=STATUS_FILL.get(row["الحالة"],"FFFFFF"))
+                    vals = [i]+[row[c] for c in show]
+                    fc   = PatternFill("solid", fgColor=STATUS_FILL.get(row["الحالة"],"FFFFFF"))
                     for ci, v in enumerate(vals, 1):
                         cell = ws.cell(ri, ci, v)
                         cell.fill = fc
                         cell.alignment = Alignment(horizontal="center", vertical="center")
                 buf = io.BytesIO(); wb.save(buf)
-                st.download_button(
-                    "📥 تحميل Excel",
-                    data=buf.getvalue(),
+                st.download_button("📥 تحميل Excel", data=buf.getvalue(),
                     file_name=f"المترشحون_{datetime.now().strftime('%Y%m%d')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
-                )
+                    use_container_width=True)
             except Exception as e:
                 st.error(f"خطأ Excel: {e}")
 
 
 def _detail(row):
-    """عرض تفاصيل ملف مترشح"""
+    """عرض تفاصيل ملف مترشح مع روابط Drive"""
+    username = row.get("اسم_المستخدم","")
+
     st.markdown(f"""
     <div class="card">
       <div class="card-title">📋 ملف: {row['الاسم_الكامل']}</div>
@@ -325,65 +280,48 @@ def _detail(row):
       </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # تفصيل النقاط
     try:
         bd = row.get("التفصيل","{}") or "{}"
         breakdown = json.loads(bd) if isinstance(bd, str) else bd
         if breakdown:
-            st.markdown('<div class="card"><div class="card-title">تفصيل النقاط</div>',
-                        unsafe_allow_html=True)
+            st.markdown('<div class="card"><div class="card-title">📊 تفصيل النقاط</div>', unsafe_allow_html=True)
             for k, v in breakdown.items():
                 if v is None:
-                    st.markdown(
-                        f'<div class="score-row"><span>{k}</span>'
-                        f'<span style="color:#c8973a;font-size:.82rem;">⏳ اللجنة</span></div>',
-                        unsafe_allow_html=True)
+                    st.markdown(f'<div class="score-row"><span>{k}</span><span style="color:#c8973a;font-size:.82rem;">⏳ اللجنة</span></div>', unsafe_allow_html=True)
                 else:
-                    st.markdown(
-                        f'<div class="score-row"><span>{k}</span>'
-                        f'{_item_pts_badge(v)}</div>',
-                        unsafe_allow_html=True)
+                    col = "#e74c3c" if float(v) < 0 else "#1a3a5c"
+                    st.markdown(f'<div class="score-row"><span>{k}</span><span style="font-weight:700;color:{col};">{float(v):+.1f} ن</span></div>', unsafe_allow_html=True)
             c1,c2,c3 = st.columns(3)
-            for col, (label, val, color) in zip(
-                [c1,c2,c3],
-                [("نقاط جزئية", row["النقاط_الجزئية"], "#c8973a"),
-                 ("نقاط الرتبة", row["نقاط_الرتبة"],   "#185fa5"),
-                 ("المجموع",     row["النقاط_الكلية"],  "#27ae60")]
-            ):
+            for col, (label, val, color) in zip([c1,c2,c3],[
+                ("نقاط جزئية", row["النقاط_الجزئية"], "#c8973a"),
+                ("نقاط الرتبة", row["نقاط_الرتبة"],   "#185fa5"),
+                ("المجموع",     row["النقاط_الكلية"],  "#27ae60")
+            ]):
                 with col:
-                    st.markdown(
-                        f'<div style="text-align:center;padding:.7rem;background:#f8f9fa;border-radius:8px;">'
-                        f'<div style="font-size:.78rem;color:#6b7f96;">{label}</div>'
-                        f'<div style="font-size:1.4rem;font-weight:800;color:{color};">{float(val):.1f}</div>'
-                        f'</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="text-align:center;padding:.7rem;background:#f8f9fa;border-radius:8px;"><div style="font-size:.78rem;color:#6b7f96;">{label}</div><div style="font-size:1.4rem;font-weight:800;color:{color};">{float(val):.1f}</div></div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
     except Exception:
         pass
 
-    # عرض وثائق المترشح من Drive
-    username = row.get("اسم_المستخدم","")
-    if username:
-        try:
-            from utils.drive import get_candidate_docs
-            docs = get_candidate_docs(username)
-            if docs:
-                st.markdown('<div class="card"><div class="card-title">📎 وثائق المترشح على Drive</div>',
-                            unsafe_allow_html=True)
-                for doc in docs:
+    # ② روابط Drive
+    try:
+        drive_raw = row.get("روابط_Drive","{}") or "{}"
+        links = json.loads(drive_raw) if isinstance(drive_raw, str) else drive_raw
+        if links:
+            st.markdown('<div class="card"><div class="card-title">📎 وثائق المترشح على Drive</div>', unsafe_allow_html=True)
+            for doc_name, link in links.items():
+                if link and link.startswith("http"):
                     c1, c2 = st.columns([4,1])
                     with c1:
-                        st.markdown(f"📄 {doc['name']} ({doc['size_kb']} KB)")
+                        st.markdown(f"📄 **{doc_name}**")
                     with c2:
-                        if doc.get("link"):
-                            st.markdown(f"[🔗 فتح]({doc['link']})")
-                st.markdown('</div>', unsafe_allow_html=True)
-            else:
-                st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لا توجد وثائق بعد.</div>',
-                            unsafe_allow_html=True)
-        except Exception as e:
-            st.markdown(f'<div class="alert al-wn" style="font-size:.82rem;">⚠️ {e}</div>',
-                        unsafe_allow_html=True)
-
-
-def _item_pts_badge(pts):
-    col = "#e74c3c" if float(pts) < 0 else "#1a3a5c"
-    return f'<span style="font-weight:700;color:{col};">{float(pts):+.1f} ن</span>'
+                        st.link_button("🔗 فتح", link)
+                else:
+                    st.markdown(f"📄 {doc_name}")
+            st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لا توجد وثائق مرفوعة.</div>', unsafe_allow_html=True)
+    except Exception:
+        pass

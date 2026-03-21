@@ -114,11 +114,13 @@ def upload_all_from_session(username: str) -> dict:
     saved = {}
     for key, val in files:
         try:
-            doc_name = key.replace("file_", "")
+            skey     = key.replace("file_", "")
+            label    = val.get("label", skey)   # الاسم الواضح
             content  = val["content"]
             ext      = val["name"].rsplit(".", 1)[-1] if "." in val["name"] else "pdf"
-            filename = f"{username}_{doc_name}.{ext}"
+            filename = f"{username}_{label}.{ext}"
             mime     = val.get("mime", "application/pdf")
+            doc_name = label
 
             _log(f"⬆️ رفع: {filename} ({len(content)//1024} KB)")
 
