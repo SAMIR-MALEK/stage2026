@@ -220,7 +220,7 @@ def show_committee():
         for idx, row in df_s.iterrows():
             c1,c2,c3,c4 = st.columns([3,1.5,2,1.5])
             with c1:
-                st.markdown(f'<div style="font-weight:600;">#{idx+1} {row["الاسم_الكامل"]}<br><span style="font-size:.78rem;color:#6b7f96;">{row["السلم"]}</span></div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="font-weight:600;">#{idx+1} {row["الاسم_الكامل"]}<br><span style="font-size:.78rem;color:#6b7f96;">{row.get("الصيغة", row.get("السلك",""))}</span></div>', unsafe_allow_html=True)
             with c2:
                 st.markdown(f'<div style="text-align:center;"><div style="font-size:1.4rem;font-weight:800;color:#1a3a5c;">{row["النقاط_الكلية"]:.1f}</div><div style="font-size:.72rem;color:#6b7f96;">نقطة</div></div>', unsafe_allow_html=True)
             with c3:
