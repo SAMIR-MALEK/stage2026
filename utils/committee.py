@@ -172,16 +172,28 @@ def show_committee():
             st.markdown('<div class="alert al-ok">✅ تمت إضافة نقاط الرتبة لجميع المترشحين.</div>', unsafe_allow_html=True)
         else:
             for _, row in needs.iterrows():
-                scale = row["السلم"]
-                rng   = RANK_SCORE_RANGES.get(scale, (0, 12))
+                scale = row.get("الصيغة", row.get("السلك",""))
+                rng   = RANK_SCORE_RANGES.get(scale, (0.0, 12.0))
                 has   = rng[1] > 0
                 st.markdown('<div class="item-block">', unsafe_allow_html=True)
                 c1,c2,c3,c4 = st.columns([3,2,1.5,1.5])
                 with c1:
                     st.markdown(f"**{row['الاسم_الكامل']}**")
                     st.markdown(f'<span style="font-size:.8rem;color:#6b7f96;">{scale}</span>', unsafe_allow_html=True)
+                    # زر عرض وثيقة الرتبة
+                    try:
+                        links_raw = row.get("روابط_Drive","{}") or "{}"
+                        import json as _json
+                        links = _json.loads(links_raw) if isinstance(links_raw,str) else links_raw
+                        rank_link = links.get("وثيقة_الرتبة_العلمية",
+                                    links.get("وثيقة_الرتبة_الوظيفية",
+                                    links.get("rank_doc","")))
+                        if rank_link and str(rank_link).startswith("http"):
+                            st.markdown(f'<a href="{rank_link}" target="_blank" style="font-size:.8rem;color:#185fa5;">🔗 وثيقة الرتبة</a>', unsafe_allow_html=True)
+                    except Exception:
+                        pass
                 with c2:
-                    st.markdown(f"نقاط جزئية: **{row['النقاط_الجزئية']:.1f}**")
+                    st.markdown(f"نقاط جزئية: **{float(str(row['النقاط_الجزئية']).replace(',','')):.1f}**")
                 with c3:
                     rank_val = st.number_input(
                         f"نقاط الرتبة ({float(rng[0]):.0f}–{float(rng[1]):.0f})",
