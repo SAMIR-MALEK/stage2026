@@ -27,7 +27,8 @@ def _load_excel() -> dict:
     if not USERS_FILE.exists():
         return {}
     try:
-        df = pd.read_excel(USERS_FILE, sheet_name="المستخدمون", skiprows=1, dtype=str)
+        # الصف الأول: عناوين، الصف الثاني: توضيحات (نتخطاه)
+        df = pd.read_excel(USERS_FILE, sheet_name=0, header=0, skiprows=[1], dtype=str)
         df.columns = df.columns.str.strip()
         users = {}
         for _, r in df.iterrows():
