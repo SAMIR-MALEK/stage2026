@@ -93,6 +93,26 @@ def _find_doc_link(label: str, all_links: dict) -> str:
     return ""
 
 
+
+def _get_label(key: str) -> str:
+    """إعادة اسم عربي واضح للوثيقة"""
+    if key in LABEL_MAP:
+        return LABEL_MAP[key]
+    clean = key.replace("_"," ").strip()
+    replacements = {
+        "adm f4 ":"","adm f3 ":"","adm f2 ":"","adm f1 ":"",
+        "tr ":"","sc ":"","rs ":"",
+        "cert":"شهادة","doc":"وثيقة",
+        "istimara":"استمارة الترشح",
+        "mashrou3":"مشروع العمل",
+        "ta3ahod":"التعهد",
+        "tasrih":"التصريح الشرفي",
+        "0":"","1":"","2":"","3":"",
+    }
+    for old, new in replacements.items():
+        clean = clean.replace(old, new)
+    return clean.strip() or key
+
 def _logout():
     for k in list(st.session_state.keys()): del st.session_state[k]
     st.rerun()
