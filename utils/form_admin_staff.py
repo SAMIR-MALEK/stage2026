@@ -127,6 +127,10 @@ def show_form():
         _show_submitted()
         return
 
+    # ── الوثائق الإدارية المطلوبة ─────────────────
+    admin_docs_ok = show_admin_docs("form4")
+    st.markdown("---")
+
     if "bodies"    not in st.session_state: st.session_state.bodies    = []
     if "iprojects" not in st.session_state: st.session_state.iprojects = []
 
