@@ -1,31 +1,25 @@
-"""
-تسجيل الدخول — يقرأ من users.xlsx
-4 أسلاك → 4 صيغ
-منع التقديم المزدوج عبر التحقق من Google Sheets
-"""
+"""تسجيل الدخول — منع التسجيل المزدوج بشكل صارم"""
 import streamlit as st
 import pandas as pd
 from pathlib import Path
 
 USERS_FILE = Path("data/users.xlsx")
 
-# ربط السلك بالصيغة والـ submitted_key
-SILK_TO_FORM = {
-    "أساتذة محاضرون":  ("form1", "submitted_form1"),
-    "أساتذة مساعدون":  ("form2", "submitted_form2"),
-    "طلبة دكتوراه":    ("form3", "submitted_form3"),
-    "إداريون وتقنيون": ("form4", "submitted_form4"),
+SILK_TO_SUBMITTED = {
+    "أساتذة محاضرون":  "submitted_form1",
+    "أساتذة مساعدون":  "submitted_form2",
+    "طلبة دكتوراه":    "submitted_form3",
+    "إداريون وتقنيون": "submitted_form4",
 }
 
-# بيانات تجريبية
 _DEMO = {
-    ("admin",    "Adm@2026"): {"name":"مدير المنصة",        "role":"admin",  "silk":"إداريون وتقنيون", "rank":"مدير",                   "grade":1,  "years":25, "status":"active"},
-    ("comite1",  "Com@2026"): {"name":"لجنة الانتقاء",      "role":"committee","silk":"أساتذة محاضرون","rank":"أستاذ التعليم العالي",   "grade":1,  "years":20, "status":"active"},
-    ("benali",   "Bjb@2026"): {"name":"أ.د. محمد بن علي",   "role":"employee","silk":"أساتذة محاضرون", "rank":"أستاذ التعليم العالي",   "grade":1,  "years":15, "status":"active"},
-    ("maamri",   "Bjb@1234"): {"name":"أ. سارة معمري",      "role":"employee","silk":"أساتذة محاضرون", "rank":"أستاذ محاضر قسم أ",      "grade":2,  "years":8,  "status":"active"},
-    ("cherif",   "Bjb@5678"): {"name":"أ. أحمد شريف",       "role":"employee","silk":"أساتذة مساعدون", "rank":"أستاذ مساعد قسم أ",      "grade":1,  "years":4,  "status":"active"},
-    ("hamidi",   "Bjb@3456"): {"name":"كريم حميدي",         "role":"employee","silk":"طلبة دكتوراه",   "rank":"طالب دكتوراه",           "grade":1,  "years":3,  "status":"active"},
-    ("ferhat",   "Bjb@1111"): {"name":"سليم فرحات",         "role":"employee","silk":"إداريون وتقنيون","rank":"مهندس رئيس",             "grade":12, "years":10, "status":"active"},
+    ("admin",    "Adm@2026"): {"name":"مدير المنصة",       "role":"admin",     "silk":"إداريون وتقنيون","rank":"مدير",                 "grade":1, "years":25,"status":"active"},
+    ("comite1",  "Com@2026"): {"name":"لجنة الانتقاء",     "role":"committee", "silk":"أساتذة محاضرون", "rank":"أستاذ التعليم العالي", "grade":1, "years":20,"status":"active"},
+    ("benali",   "Bjb@2026"): {"name":"أ.د. محمد بن علي",  "role":"employee",  "silk":"أساتذة محاضرون", "rank":"أستاذ التعليم العالي", "grade":1, "years":15,"status":"active"},
+    ("maamri",   "Bjb@1234"): {"name":"أ. سارة معمري",     "role":"employee",  "silk":"أساتذة محاضرون", "rank":"أستاذ محاضر قسم أ",    "grade":2, "years":8, "status":"active"},
+    ("cherif",   "Bjb@5678"): {"name":"أ. أحمد شريف",      "role":"employee",  "silk":"أساتذة مساعدون", "rank":"أستاذ مساعد قسم أ",    "grade":1, "years":4, "status":"active"},
+    ("hamidi",   "Bjb@3456"): {"name":"كريم حميدي",        "role":"employee",  "silk":"طلبة دكتوراه",   "rank":"طالب دكتوراه",         "grade":1, "years":3, "status":"active"},
+    ("ferhat",   "Bjb@1111"): {"name":"سليم فرحات",        "role":"employee",  "silk":"إداريون وتقنيون","rank":"مهندس رئيس",           "grade":12,"years":10,"status":"active"},
 }
 
 
@@ -62,37 +56,38 @@ def _load_excel() -> dict:
 
 
 def _check_submitted(username: str, silk: str):
-    """تحقق إذا قدّم المترشح مسبقاً — من Sheets أو محلياً"""
-    _, sub_key = SILK_TO_FORM.get(silk, ("", ""))
+    """
+    تحقق صارم من Google Sheets أولاً ثم المحلي
+    إذا وجد تقديماً سابقاً → يضع submitted_key ويحفظ البيانات
+    """
+    sub_key = SILK_TO_SUBMITTED.get(silk, "")
     if not sub_key:
         return
 
-    # 1) من Google Sheets
+    # ① من Google Sheets — المصدر الرئيسي
     try:
-        from utils.sheets import _get_client, SHEET_NAME
-        cl = _get_client()
-        if cl:
-            records = cl.open(SHEET_NAME).sheet1.get_all_records()
-            for r in records:
-                if str(r.get("اسم_المستخدم","")).strip() == username:
-                    st.session_state[sub_key] = True
-                    st.session_state["submitted_data"] = {
-                        "total_score": r.get("النقاط_الإجمالية", 0),
-                        "breakdown":   r.get("تفصيل_النقاط","{}"),
-                        "drive_links": r.get("روابط_الوثائق","{}"),
-                    }
-                    return
+        from utils.sheets import check_already_submitted
+        record = check_already_submitted(username)
+        if record:
+            st.session_state[sub_key] = True
+            st.session_state["submitted_data"] = {
+                "total_score": float(record.get("النقاط_الكلية", record.get("النقاط_الجزئية", 0))),
+                "breakdown":   str(record.get("تفصيل_النقاط","{}")),
+                "drive_links": str(record.get("روابط_الوثائق","{}")),
+            }
+            return
     except Exception:
         pass
 
-    # 2) من الملفات المحلية
+    # ② من الملفات المحلية
     sub_dir = Path("data/submissions")
     if sub_dir.exists():
-        for f in sub_dir.glob(f"{username}_*.json"):
+        for f in sorted(sub_dir.glob(f"{username}_*.json"), reverse=True):
             try:
                 import json
-                with open(f, encoding="utf-8") as fp: d = json.load(fp)
-                st.session_state[sub_key]          = True
+                with open(f, encoding="utf-8") as fp:
+                    d = json.load(fp)
+                st.session_state[sub_key] = True
                 st.session_state["submitted_data"] = d
                 return
             except Exception:
@@ -144,17 +139,20 @@ def show_login():
 
 def _handle(u: str, p: str):
     if not u or not p:
-        st.markdown('<div class="alert al-er">❌ يرجى إدخال اسم المستخدم وكلمة المرور.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="alert al-er">❌ يرجى إدخال اسم المستخدم وكلمة المرور.</div>',
+                    unsafe_allow_html=True)
         return
 
     user = _load_excel().get((u,p)) or _DEMO.get((u,p))
 
     if not user:
-        st.markdown('<div class="alert al-er">❌ بيانات الدخول غير صحيحة.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="alert al-er">❌ بيانات الدخول غير صحيحة.</div>',
+                    unsafe_allow_html=True)
         return
 
     if user.get("status","active") != "active":
-        st.markdown('<div class="alert al-er">🚫 الحساب معطّل — تواصل مع الإدارة.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="alert al-er">🚫 الحساب معطّل — تواصل مع الإدارة.</div>',
+                    unsafe_allow_html=True)
         return
 
     # حفظ الجلسة
@@ -167,8 +165,9 @@ def _handle(u: str, p: str):
     st.session_state.grade     = user.get("grade", 0)
     st.session_state.years     = user.get("years", 0)
 
-    # تحقق من التقديم السابق — إذا قدّم يرى ملفه فقط
+    # تحقق صارم من التقديم السابق قبل أي شيء
     if user["role"] == "employee":
-        _check_submitted(u, user.get("silk",""))
+        with st.spinner("جارٍ التحقق من حالة ملفك..."):
+            _check_submitted(u, user.get("silk",""))
 
     st.rerun()

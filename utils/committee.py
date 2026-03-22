@@ -181,9 +181,11 @@ def show_committee():
                     st.markdown(f"نقاط جزئية: **{row['النقاط_الجزئية']:.1f}**")
                 with c3:
                     rank_val = st.number_input(
-                        f"نقاط الرتبة ({rng[0]:.0f}–{rng[1]:.0f})",
-                        min_value=rng[0], max_value=max(rng[1], 0.1),
-                        value=rng[0], step=0.5,
+                        f"نقاط الرتبة ({float(rng[0]):.0f}–{float(rng[1]):.0f})",
+                        min_value=float(rng[0]),
+                        max_value=float(max(rng[1], 0.1)),
+                        value=float(rng[0]),
+                        step=0.5,
                         key=f"ri_{row['اسم_المستخدم']}",
                         disabled=not has
                     ) if has else 0.0
