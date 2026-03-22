@@ -7,7 +7,7 @@
 4. بعد التقديم: عرض فقط بدون تعديل
 """
 import streamlit as st, json
-from utils.admin_docs import show_admin_docs, io
+from utils.admin_docs import show_admin_docs
 from datetime import datetime
 from pathlib import Path
 
