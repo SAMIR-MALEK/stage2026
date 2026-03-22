@@ -7,6 +7,7 @@
 4. بعد التقديم: عرض فقط بدون تعديل
 """
 import streamlit as st, json
+from utils._shared import do_submit, show_submitted as _show_sub
 from utils.admin_docs import show_admin_docs
 from datetime import datetime
 from pathlib import Path
@@ -336,59 +337,6 @@ def show_form():
             "المشاريع الدولية": iproj_pts, "المنصب العالي": high_pts,
             "خصم الاستفادات": -deduction,
         }
-        _submit(partial, breakdown)
+        do_submit(partial, breakdown, "الموظفون الإداريون والتقنيون", "submitted_admin")
     st.markdown('</div>', unsafe_allow_html=True)
 
-
-def _submit(partial, breakdown):
-    with st.spinner("⏳ جارٍ رفع الوثائق وحفظ الملف..."):
-
-        # ── رفع كل الوثائق المحفوظة في session_state ──
-        drive_links = {}
-        try:
-            from utils.drive import upload_file
-            username = st.session_state.username
-            for key, val in st.session_state.items():
-                if key.startswith("file_") and isinstance(val, dict) and "content" in val:
-                    doc_name = key.replace("file_", "")
-                    ext      = val["name"].rsplit(".", 1)[-1]
-                    link = upload_file(
-                        content   = val["content"],
-                        filename  = f"{username}_{doc_name}.{ext}",
-                        username  = username,
-                        mime_type = val["mime"],
-                    )
-                    if link:
-                        drive_links[doc_name] = link
-        except Exception:
-            pass
-
-        # ── حفظ في Sheets ────────────────────────────
-        data = {
-            "username":    st.session_state.username,
-            "name":        st.session_state.user_name,
-            "grade":       "مرفوعة — بانتظار اللجنة",
-            "position":    st.session_state.get("rank",""),
-            "scale":       "الموظفون الإداريون والتقنيون",
-            "total_score": partial,
-            "breakdown":   json.dumps(breakdown, ensure_ascii=False),
-            "drive_links": json.dumps(drive_links, ensure_ascii=False),
-            "status":      "قيد المراجعة",
-        }
-        saved = False
-        try:
-            from utils.sheets import save_application
-            saved = save_application(data)
-        except Exception:
-            pass
-        if not saved:
-            Path("data/submissions").mkdir(parents=True, exist_ok=True)
-            fname = f"data/submissions/{st.session_state.username}_{datetime.now().strftime('%Y%m%d_%H%M')}.json"
-            with open(fname,"w",encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-
-        # ── تسجيل أن المترشح قدّم ملفه ──────────────
-        st.session_state.submitted_admin = True
-        st.session_state.submitted_data  = data
-
-    st.rerun()  # يُعيد التشغيل لعرض صفحة "تم التقديم"

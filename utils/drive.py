@@ -137,8 +137,13 @@ def upload_all_from_session(username: str) -> dict:
             ).execute()
 
             link = uploaded.get("webViewLink", "")
+            if not link:
+                # محاولة الحصول على الرابط بطريقة أخرى
+                file_id = uploaded.get("id","")
+                if file_id:
+                    link = f"https://drive.google.com/file/d/{file_id}/view"
             saved[doc_name] = link
-            _log(f"✅ رُفع: {filename}")
+            _log(f"✅ رُفع: {filename} — رابط: {link[:50] if link else 'فارغ'}")
 
             # صلاحية القراءة
             try:
