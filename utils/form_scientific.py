@@ -78,7 +78,7 @@ def show_form():
     rank_pts_val = RANK_S1.get(user_rank, float(st.session_state.get("grade",0)))
     _sec("①", "نقاط الرتبة العلمية",
          f"رتبتك: <strong>{user_rank}</strong> — نقاطك: <strong>{rank_pts_val:.1f}</strong>")
-    rank_ok = smart_upload("وثيقة إثبات الرتبة (آخر ترقية)", "rank_doc", required=True)
+    rank_ok = smart_upload("وثيقة آخر ترقية في الرتبة", "rank_doc", required=True)
     taheel_pts = 0.0
     if user_rank == "أستاذ محاضر قسم ب":
         st.markdown('<div class="alert al-in">إضافة 4 نقاط لتحضير ملف التأهيل الجامعي</div>', unsafe_allow_html=True)
