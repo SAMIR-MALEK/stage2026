@@ -44,6 +44,20 @@ def _f(v):
         return 0.0
 
 
+
+def _guess_silk(rank: str) -> str:
+    """تخمين السلك من الرتبة إذا كان عمود السلك فارغاً"""
+    PROF = ["أستاذ التعليم العالي","أستاذ محاضر قسم أ","أستاذ محاضر قسم ب","بروفيسور"]
+    ASST = ["أستاذ مساعد قسم أ","أستاذ مساعد قسم ب"]
+    PHD  = ["طالب دكتوراه","دكتوراه"]
+    for r in PROF:
+        if r in rank: return "أساتذة محاضرون"
+    for r in ASST:
+        if r in rank: return "أساتذة مساعدون"
+    for r in PHD:
+        if r in rank: return "طلبة دكتوراه"
+    return "إداريون وتقنيون"
+
 def _load_df() -> pd.DataFrame:
     records = []
     try:
@@ -70,7 +84,7 @@ def _load_df() -> pd.DataFrame:
         rows.append({
             "اسم_المستخدم": str(r.get("اسم_المستخدم", r.get("username",""))).strip(),
             "الاسم_الكامل": str(r.get("الاسم_الكامل", r.get("name",""))).strip(),
-            "السلك":        str(r.get("السلك",  r.get("silk",""))).strip(),
+            "السلك":        str(r.get("السلك", r.get("silk",""))).strip() or _guess_silk(str(r.get("الرتبة", r.get("rank",""))).strip()),
             "الرتبة":       str(r.get("الرتبة", r.get("rank",""))).strip(),
             "الصيغة":       str(r.get("الصيغة", r.get("scale",""))).strip(),
             "النقاط_الجزئية":_f(r.get("النقاط_الجزئية", r.get("total_score",0))),
