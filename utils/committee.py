@@ -307,10 +307,25 @@ def show_committee():
 
             st.markdown(f"**{len(silk_df)} ملف مقدَّم**")
 
+            # حقل البحث
+            search = st.text_input("🔍 بحث بالاسم أو الرتبة:", key=f"search_{tab_name}",
+                                   placeholder="اكتب للبحث...")
+            if search:
+                mask = silk_df.apply(
+                    lambda r: search.lower() in str(r["الاسم_الكامل"]).lower() or
+                              search.lower() in str(r["الرتبة"]).lower(),
+                    axis=1
+                )
+                silk_df = silk_df[mask]
+                st.markdown(f'<div style="font-size:.82rem;color:#6b7f96;">{len(silk_df)} نتيجة</div>',
+                            unsafe_allow_html=True)
+
             for _, row in silk_df.iterrows():
                 sc = {"مقبول":"🟢","مرفوض":"🔴","قائمة انتظار":"🔵","قيد المراجعة":"🟡"}.get(row["الحالة"],"⚪")
+                # تنظيف الرتبة من أي نص غير مرغوب
+                rank_clean = str(row['الرتبة']).replace("keyboard_ar","").replace("_ar","").strip()
                 with st.expander(
-                    f"{sc} {row['الاسم_الكامل']} | {row['الرتبة']} | "
+                    f"{sc} {row['الاسم_الكامل']} | {rank_clean} | "
                     f"نقاط: {row['النقاط_الكلية']:.1f} | {row['الحالة']}"
                 ):
                     _review_card(row)
