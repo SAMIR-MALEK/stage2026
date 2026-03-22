@@ -170,17 +170,20 @@ def do_submit(partial, scores, scale_name, submitted_key):
 
 
 def show_submitted():
-    """عرض الملف المقدَّم بدون تعديل + تشخيص Drive"""
-    data        = st.session_state.get("submitted_data", {})
-    files_sub   = st.session_state.get("files_submitted", 0)
-    files_up    = st.session_state.get("files_uploaded",  0)
-    drive_logs  = st.session_state.get("drive_logs", [])
+    """عرض الملف المقدَّم بدون تعديل"""
+    data       = st.session_state.get("submitted_data", {})
+    drive_logs = st.session_state.get("drive_logs", [])
+
+    total = 0.0
+    try:
+        total = float(data.get("total_score", 0))
+    except Exception:
+        pass
 
     st.markdown(f"""
     <div class="alert al-ok">
       ✅ <strong>تم تقديم ملفك بنجاح — لا يمكن التعديل بعد التقديم.</strong><br>
-      مجموع نقاطك الجزئية: <strong>{data.get('total_score', 0):.1f} نقطة</strong><br>
-      ملفات في النظام: <strong>{files_sub}</strong> — مرفوعة على Drive: <strong>{files_up}</strong>
+      مجموع نقاطك الجزئية: <strong>{total:.1f} نقطة</strong>
     </div>
     """, unsafe_allow_html=True)
 
@@ -207,8 +210,4 @@ def show_submitted():
             st.markdown(f"• [{name}]({link})")
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # سجل Drive للتشخيص
-    if drive_logs:
-        with st.expander("🔍 سجل رفع الوثائق (للتشخيص)"):
-            for log in drive_logs:
-                st.markdown(f"`{log}`")
+
