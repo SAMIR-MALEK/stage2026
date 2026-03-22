@@ -129,11 +129,19 @@ def show_form():
     if "bodies"    not in st.session_state: st.session_state.bodies    = []
     if "iprojects" not in st.session_state: st.session_state.iprojects = []
 
-    # ① الرتبة الوظيفية
-    _sec("①", "الرتبة الوظيفية",
-         "ارفع وثيقة آخر ترقية — اللجنة تحدد نقاطك (8–12 نقطة).")
-    rank_ok = _smart_upload("وثيقة آخر ترقية في الرتبة", "rank_doc", required=True)
-    st.markdown('<div class="alert al-wn" style="font-size:.85rem;">⏳ نقاط الرتبة تُحدَّد من اللجنة بعد مراجعة الوثيقة.</div>',
+    # ① نقاط الرتبة الوظيفية
+    _sec("①", "نقاط الرتبة الوظيفية (الصنف)",
+         "نقطتك المبدئية محسوبة من صنفك — يمكنك تعديلها وستؤكدها اللجنة.")
+    rank_pts_default = float(st.session_state.get("rank_pts", st.session_state.get("grade", 0)))
+    rank_pts_input = st.number_input(
+        "نقاط الرتبة",
+        min_value=0.0, max_value=20.0,
+        value=rank_pts_default,
+        step=0.5,
+        key="rank_pts_input",
+    )
+    rank_ok = _smart_upload("وثيقة إثبات الرتبة (آخر ترقية)", "rank_doc", required=True)
+    st.markdown(f'<div class="alert al-wn" style="font-size:.85rem;">نقطتك المبدئية: <strong>{rank_pts_default:.1f}</strong> — ستؤكدها اللجنة.</div>',
                 unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -271,13 +279,13 @@ def show_form():
     st.markdown('</div>', unsafe_allow_html=True)
 
     # ══ ملخص النقاط — بدون max(0) ══
-    partial = seniority_pts + lang_pts + min_pts + body_pts + iproj_pts + high_pts - deduction
+    partial = rank_pts_input + seniority_pts + lang_pts + min_pts + body_pts + iproj_pts + high_pts - deduction
     # لا نوقف عند الصفر — قد يكون سالباً
 
     st.markdown('<div class="card"><div class="card-title">🏆 ملخص النقاط</div>',
                 unsafe_allow_html=True)
     rows = [
-        ("① الرتبة الوظيفية",        None,          "⏳ تُحدَّد من اللجنة (8–12 ن)"),
+        ("① نقاط الرتبة الوظيفية",   rank_pts_input, None),
         ("② الأقدمية",               seniority_pts,  None),
         ("③ اللغات",                 lang_pts,        None),
         ("④ المشروع الوزاري",        min_pts,         None),
@@ -304,7 +312,7 @@ def show_form():
     <div class="total-box" style="margin-top:.8rem;">
       <div style="color:rgba(255,255,255,.65);font-size:.82rem;">مجموع النقاط الجزئية</div>
       <div class="total-num" style="color:{color};">{partial:.1f}</div>
-      <div style="color:rgba(255,255,255,.5);font-size:.78rem;">+ نقاط الرتبة تُضاف من اللجنة (8–12 ن)</div>
+      <div style="color:rgba(255,255,255,.5);font-size:.78rem;">+ تؤكد اللجنة نقاط الرتبة</div>
     </div>
     """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -319,7 +327,7 @@ def show_form():
                  disabled=not (decl and rank_ok and admin_docs_ok),
                  use_container_width=True):
         breakdown = {
-            "الأقدمية": seniority_pts, "اللغات": lang_pts,
+            "نقاط الرتبة": rank_pts_input, "الأقدمية": seniority_pts, "اللغات": lang_pts,
             "المشروع الوزاري": min_pts, "هيئات المرافقة": body_pts,
             "المشاريع الدولية": iproj_pts, "المنصب العالي": high_pts,
             "خصم الاستفادات": -deduction,

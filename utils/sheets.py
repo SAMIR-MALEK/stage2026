@@ -91,21 +91,24 @@ def save_application(data: dict) -> bool:
     try:
         sh = _get_or_create_sheet(client)
         ws = sh.sheet1
+        partial   = round(float(data.get("total_score",   0)), 2)
+        rank_pts  = round(float(data.get("rank_pts",      0)), 2)
+        total     = round(partial + rank_pts, 2)
         row = [
             datetime.now().strftime("%Y-%m-%d %H:%M"),
-            data.get("username",      ""),
-            data.get("name",          ""),
-            data.get("silk",          data.get("position", "")),
-            data.get("rank",          data.get("grade", "")),
-            data.get("grade_num",     ""),
-            data.get("years",         ""),
-            data.get("scale",         ""),
-            data.get("total_score",   0),
-            data.get("rank_pts",      0),
-            data.get("total_score",   0),
-            data.get("breakdown",     "{}"),
-            data.get("drive_links",   "{}"),
-            data.get("status",        "قيد المراجعة"),
+            data.get("username",  ""),
+            data.get("name",      ""),
+            data.get("silk",      data.get("position", "")),
+            data.get("rank",      data.get("grade", "")),
+            data.get("grade_num", ""),
+            data.get("years",     ""),
+            data.get("scale",     ""),
+            partial,
+            rank_pts,
+            total,
+            data.get("breakdown",  "{}"),
+            data.get("drive_links","{}"),
+            data.get("status",    "قيد المراجعة"),
         ]
         ws.append_row(row)
         # تنسيق الصف الجديد

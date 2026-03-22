@@ -164,6 +164,8 @@ def _handle(u: str, p: str):
     st.session_state.rank      = user.get("rank","")
     st.session_state.grade     = user.get("grade", 0)
     st.session_state.years     = user.get("years", 0)
+    # الصنف = نقاط الرتبة الافتراضية
+    st.session_state.rank_pts  = float(user.get("grade", 0))
 
     # تحقق صارم من التقديم السابق قبل أي شيء
     if user["role"] == "employee":

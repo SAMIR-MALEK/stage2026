@@ -60,12 +60,24 @@ def show_form():
 
     scores = {}
 
-    # ① الرتبة
-    _sec("①", "الرتبة العلمية", "ارفع وثيقة آخر ترقية — اللجنة تحدد نقاطك (3–9 نقاط).")
-    rank_ok = smart_upload("وثيقة آخر ترقية في الرتبة", "tr_rank", required=True)
-    st.markdown('<div class="alert al-wn" style="font-size:.85rem;">⏳ نقاط الرتبة تُحدَّد من اللجنة.</div>', unsafe_allow_html=True)
+
+    # ── نقاط الرتبة — المترشح يراها ويمكنه تعديلها ──────
+    _sec("①", "نقاط الرتبة (الصنف)",
+         "نقطتك المبدئية محسوبة من صنفك الوظيفي — يمكنك تعديلها إذا كانت غير صحيحة وستؤكدها اللجنة.")
+    rank_pts_default = float(st.session_state.get("rank_pts", st.session_state.get("grade", 0)))
+    rank_pts_input = st.number_input(
+        "نقاط الرتبة",
+        min_value=0.0, max_value=20.0,
+        value=rank_pts_default,
+        step=0.5,
+        key="rank_pts_input",
+        help="هذه النقطة ستؤكدها اللجنة بعد مراجعة وثيقة الترقية"
+    )
+    rank_doc_ok = smart_upload("وثيقة إثبات الرتبة (آخر ترقية)", "rank_doc", required=True)
+    st.markdown(f'<div class="alert al-wn" style="font-size:.85rem;">نقاط رتبتك المبدئية: <strong>{rank_pts_default:.1f}</strong> — ستؤكدها اللجنة بعد مراجعة الوثيقة.</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
-    scores["① الرتبة العلمية"] = None
+    scores["① نقاط الرتبة"] = rank_pts_input
+
 
     # ② التسجيل المنتظم: غير مطلوب للأساتذة المحاضرين
 
@@ -276,7 +288,7 @@ def show_form():
     scores["⑫ التدريس في جذع مشترك"] = shared_pts
 
     # ══ ملخص ══
-    partial = sum(v for v in scores.values() if v is not None)
+    partial = sum(float(v) for v in scores.values() if v is not None)
 
     st.markdown('<div class="card"><div class="card-title">🏆 ملخص النقاط</div>', unsafe_allow_html=True)
     for label, pts in scores.items():
@@ -291,7 +303,7 @@ def show_form():
     <div class="total-box" style="margin-top:.8rem;">
       <div style="color:rgba(255,255,255,.65);font-size:.82rem;">مجموع النقاط الجزئية</div>
       <div class="total-num" style="color:{color};">{partial:.1f}</div>
-      <div style="color:rgba(255,255,255,.5);font-size:.78rem;">+ نقاط الرتبة تُضاف من اللجنة</div>
+      <div style="color:rgba(255,255,255,.5);font-size:.78rem;">+ تؤكد اللجنة نقاط الرتبة</div>
     </div>
     """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)

@@ -148,8 +148,8 @@ def show_committee():
         st.markdown('<div class="alert al-in">📭 لا توجد ملفات مقدَّمة بعد.</div>', unsafe_allow_html=True)
         return
 
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "📊 قائمة المترشحين", "✏️ نقاط الرتبة", "✅ النتائج", "📥 تصدير"
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📊 قائمة المترشحين", "✏️ نقاط الرتبة", "🔧 تعديل النقاط", "✅ النتائج", "📥 تصدير"
     ])
 
     # ════ تبويب 1 ════
@@ -242,8 +242,8 @@ def show_committee():
                             st.error("❌ فشل الحفظ")
                 st.markdown('</div>', unsafe_allow_html=True)
 
-    # ════ تبويب 3 ════
-    with tab3:
+    # ════ تبويب 5 ════
+    with tab5:
         st.markdown('<div class="alert al-in">حدّد نتيجة كل مترشح بعد مراجعة ملفه.</div>', unsafe_allow_html=True)
         df_s = df.sort_values("النقاط_الكلية", ascending=False).reset_index(drop=True)
         for idx, row in df_s.iterrows():
@@ -278,8 +278,8 @@ def show_committee():
                 if _save(row["اسم_المستخدم"], row["نقاط_الرتبة"], st_val): n += 1
             st.success(f"✅ تم حفظ {n} نتيجة"); st.rerun()
 
-    # ════ تبويب 4 ════
-    with tab4:
+    # ════ تبويب 5 ════
+    with tab5:
         ex = df.sort_values("النقاط_الكلية", ascending=False).reset_index(drop=True)
         ex.index += 1; ex.index.name = "الترتيب"
         show = ["الاسم_الكامل","السلك","الصيغة","النقاط_الجزئية","نقاط_الرتبة","النقاط_الكلية","الحالة"]
