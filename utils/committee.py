@@ -204,14 +204,30 @@ def _review_card(row):
     links     = _parse(row["روابط_الوثائق"])
     breakdown = _parse(row["تفصيل_النقاط"])
 
-    # الوثائق الإدارية (خارج جدول التنقيط)
-    admin_keys = [k for k in links if k.startswith("adm_")]
-    if admin_keys:
-        st.markdown("**📋 الوثائق الإدارية:**")
-        cols = st.columns(4)
-        for ci, dk in enumerate(admin_keys):
-            link = links.get(dk,"")
-            if link and str(link).startswith("http"):
+    # ── كل الوثائق — الإدارية والإثباتية ────────────
+    if links:
+        # تقسيم الوثائق: إدارية (adm_) وإثباتية (باقي)
+        admin_links = {k:v for k,v in links.items() if k.startswith("adm_") and str(v).startswith("http")}
+        proof_links = {k:v for k,v in links.items() if not k.startswith("adm_") and str(v).startswith("http")}
+
+        if admin_links:
+            st.markdown('<div style="background:#fef9ec;border:1.5px solid #c8973a;border-radius:8px;padding:8px 12px;margin-bottom:8px;">', unsafe_allow_html=True)
+            st.markdown("**📋 الوثائق الإدارية الإقصائية** — يجب مراجعتها أولاً:")
+            cols = st.columns(3)
+            for ci, (dk, link) in enumerate(admin_links.items()):
+                label = LABEL_MAP.get(dk, dk.replace("_"," "))
+                with cols[ci % 3]:
+                    st.markdown(
+                        f'<a href="{link}" target="_blank" style="display:block;padding:6px 10px;'
+                        f'background:#fff8e6;border:1px solid #c8973a;border-radius:6px;'
+                        f'font-size:.82rem;color:#7d6010;text-decoration:none;margin-bottom:5px;font-weight:600;">'
+                        f'🔗 {label}</a>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        if proof_links:
+            st.markdown("**📎 وثائق الإثبات** (لمراجعة النقاط):")
+            cols = st.columns(4)
+            for ci, (dk, link) in enumerate(proof_links.items()):
                 label = LABEL_MAP.get(dk, dk.replace("_"," "))
                 with cols[ci % 4]:
                     st.markdown(
@@ -219,7 +235,9 @@ def _review_card(row):
                         f'background:#f0f4fa;border:1px solid #dce3ee;border-radius:6px;'
                         f'font-size:.78rem;color:#1a3a5c;text-decoration:none;margin-bottom:5px;">'
                         f'🔗 {label}</a>', unsafe_allow_html=True)
-        st.markdown("---")
+    elif not links:
+        st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لا توجد وثائق مرفوعة لهذا المترشح.</div>', unsafe_allow_html=True)
+    st.markdown("---")
 
     # تعديل النقاط
     st.markdown("**✏️ النقطة الأولية → النقطة النهائية:**")
