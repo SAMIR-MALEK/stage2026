@@ -61,20 +61,33 @@ def show_form():
     scores = {}
 
 
-    # ── نقاط الرتبة — المترشح يراها ويمكنه تعديلها ──────
-    _sec("①", "نقاط الرتبة (الصنف)",
-         "نقطتك المبدئية محسوبة من صنفك الوظيفي — يمكنك تعديلها إذا كانت غير صحيحة وستؤكدها اللجنة.")
-    rank_pts_default = float(st.session_state.get("rank_pts", st.session_state.get("grade", 0)))
-    rank_pts_input = st.number_input(
-        "نقاط الرتبة",
-        min_value=0.0, max_value=20.0,
-        value=rank_pts_default,
-        step=0.5,
-        key="rank_pts_input",
-        help="هذه النقطة ستؤكدها اللجنة بعد مراجعة وثيقة الترقية"
-    )
+    # ── نقاط الرتبة — حسب الرتبة العلمية ──────────────
+    RANK_SCORE_S1 = {
+        "أستاذ التعليم العالي": 7.0,
+        "أستاذ محاضر قسم أ":    5.0,
+        "أستاذ محاضر قسم ب":    3.0,
+    }
+    user_rank    = st.session_state.get("rank", "")
+    rank_pts_val = RANK_SCORE_S1.get(user_rank, float(st.session_state.get("grade", 0)))
+
+    _sec("①", "نقاط الرتبة العلمية",
+         f"رتبتك: <strong>{user_rank}</strong> — نقاطك المبدئية: <strong>{rank_pts_val:.1f}</strong>")
     rank_ok = smart_upload("وثيقة إثبات الرتبة (آخر ترقية)", "rank_doc", required=True)
-    st.markdown(f'<div class="alert al-wn" style="font-size:.85rem;">نقاط رتبتك المبدئية: <strong>{rank_pts_default:.1f}</strong> — ستؤكدها اللجنة بعد مراجعة الوثيقة.</div>', unsafe_allow_html=True)
+
+    # إضافة 4 نقاط لأستاذ محاضر ب إذا تعهد بتحضير التأهيل
+    taheel_pts = 0.0
+    if user_rank == "أستاذ محاضر قسم ب":
+        st.markdown('<div class="alert al-in" style="margin-top:.5rem;">إضافة 4 نقاط لتحضير ملف التأهيل الجامعي</div>', unsafe_allow_html=True)
+        taheel_ok = st.checkbox("نعم، سأقوم بتحضير ملف التأهيل الجامعي — 4 نقاط إضافية", key="taheel_chk")
+        if taheel_ok:
+            taheel_doc = smart_upload("تعهد بتحضير ملف التأهيل", "taheel_doc", required=True)
+            if taheel_doc:
+                taheel_pts = 4.0
+            else:
+                st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لن تُحتسب النقاط بدون التعهد.</div>', unsafe_allow_html=True)
+
+    rank_pts_input = rank_pts_val + taheel_pts
+    st.markdown(f'<div class="score-row"><span>نقاط الرتبة</span><span style="font-weight:700;color:#1a3a5c;">{rank_pts_input:.1f} ن</span></div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
     scores["① نقاط الرتبة"] = rank_pts_input
 

@@ -61,22 +61,8 @@ def show_form():
     scores = {}
 
 
-    # ── نقاط الرتبة — المترشح يراها ويمكنه تعديلها ──────
-    _sec("①", "نقاط الرتبة (الصنف)",
-         "نقطتك المبدئية محسوبة من صنفك الوظيفي — يمكنك تعديلها إذا كانت غير صحيحة وستؤكدها اللجنة.")
-    rank_pts_default = float(st.session_state.get("rank_pts", st.session_state.get("grade", 0)))
-    rank_pts_input = st.number_input(
-        "نقاط الرتبة",
-        min_value=0.0, max_value=20.0,
-        value=rank_pts_default,
-        step=0.5,
-        key="rank_pts_input",
-        help="هذه النقطة ستؤكدها اللجنة بعد مراجعة وثيقة الترقية"
-    )
-    rank_ok = smart_upload("وثيقة إثبات الرتبة (آخر ترقية)", "rank_doc", required=True)
-    st.markdown(f'<div class="alert al-wn" style="font-size:.85rem;">نقاط رتبتك المبدئية: <strong>{rank_pts_default:.1f}</strong> — ستؤكدها اللجنة بعد مراجعة الوثيقة.</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-    scores["① نقاط الرتبة"] = rank_pts_input
+    # لا توجد نقاط رتبة في هذه الصيغة
+    rank_ok = True  # لا وثيقة رتبة مطلوبة
 
 
     # ② التسجيل المنتظم
@@ -319,9 +305,8 @@ def show_form():
     st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    if not rank_ok:
-        st.markdown('<div class="alert al-er">❌ لا يمكن التقديم بدون رفع وثيقة آخر ترقية.</div>', unsafe_allow_html=True)
+    
     decl = st.checkbox("أُقرّ بأن جميع المعلومات المُدرجة صحيحة وكاملة وأتحمل المسؤولية الكاملة.")
-    if st.button("📤 تقديم الملف النهائي", disabled=not (decl and rank_ok and admin_docs_ok), use_container_width=True):
+    if st.button("📤 تقديم الملف النهائي", disabled=not (decl and admin_docs_ok), use_container_width=True):
         do_submit(partial, scores, SCALE_NAME, SUBMITTED_KEY)
     st.markdown('</div>', unsafe_allow_html=True)

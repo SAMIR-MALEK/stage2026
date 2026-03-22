@@ -164,8 +164,24 @@ def _handle(u: str, p: str):
     st.session_state.rank      = user.get("rank","")
     st.session_state.grade     = user.get("grade", 0)
     st.session_state.years     = user.get("years", 0)
-    # الصنف = نقاط الرتبة الافتراضية
-    st.session_state.rank_pts  = float(user.get("grade", 0))
+    # حساب نقاط الرتبة حسب السلك
+    silk  = user.get("silk","")
+    grade = int(user.get("grade", 0))
+    rank  = user.get("rank","")
+    
+    if silk == "إداريون وتقنيون":
+        # حسب الصنف
+        GRADE_S4 = {10:8.0,11:8.5,12:9.0,13:9.5,14:10.0,15:10.5,16:11.0,17:11.5}
+        rank_pts = GRADE_S4.get(grade, 12.0 if grade > 17 else 8.0)
+    elif silk == "أساتذة محاضرون":
+        # حسب الرتبة
+        RANK_S1 = {"أستاذ التعليم العالي":7.0,"أستاذ محاضر قسم أ":5.0,"أستاذ محاضر قسم ب":3.0}
+        rank_pts = RANK_S1.get(rank, float(grade))
+    else:
+        # صيغة 2 و3: لا توجد نقاط رتبة
+        rank_pts = 0.0
+    
+    st.session_state.rank_pts = rank_pts
 
     # تحقق صارم من التقديم السابق قبل أي شيء
     if user["role"] == "employee":
