@@ -207,15 +207,21 @@ def _review_card(row):
     # ── كل الوثائق — الإدارية والإثباتية ────────────
     if links:
         # تقسيم الوثائق: إدارية (adm_) وإثباتية (باقي)
-        admin_links = {k:v for k,v in links.items() if k.startswith("adm_") and str(v).startswith("http")}
-        proof_links = {k:v for k,v in links.items() if not k.startswith("adm_") and str(v).startswith("http")}
+        # الوثائق الإدارية: تبدأ بـ adm_
+        admin_links = {k:v for k,v in links.items()
+                       if k.startswith("adm_") and str(v).startswith("http")}
+        # وثائق الإثبات: كل الباقي التي لها رابط حقيقي
+        proof_links = {k:v for k,v in links.items()
+                       if not k.startswith("adm_") and str(v).startswith("http")}
+        # تأكد من طباعة عدد الوثائق للتشخيص
+        total_docs = len(admin_links) + len(proof_links)
 
         if admin_links:
             st.markdown('<div style="background:#fef9ec;border:1.5px solid #c8973a;border-radius:8px;padding:8px 12px;margin-bottom:8px;">', unsafe_allow_html=True)
             st.markdown("**📋 الوثائق الإدارية الإقصائية** — يجب مراجعتها أولاً:")
             cols = st.columns(3)
             for ci, (dk, link) in enumerate(admin_links.items()):
-                label = LABEL_MAP.get(dk, dk.replace("_"," "))
+                label = _get_label(dk)
                 with cols[ci % 3]:
                     st.markdown(
                         f'<a href="{link}" target="_blank" style="display:block;padding:6px 10px;'
@@ -228,14 +234,14 @@ def _review_card(row):
             st.markdown("**📎 وثائق الإثبات** (لمراجعة النقاط):")
             cols = st.columns(4)
             for ci, (dk, link) in enumerate(proof_links.items()):
-                label = LABEL_MAP.get(dk, dk.replace("_"," "))
+                label = _get_label(dk)
                 with cols[ci % 4]:
                     st.markdown(
                         f'<a href="{link}" target="_blank" style="display:block;padding:5px 8px;'
                         f'background:#f0f4fa;border:1px solid #dce3ee;border-radius:6px;'
                         f'font-size:.78rem;color:#1a3a5c;text-decoration:none;margin-bottom:5px;">'
                         f'🔗 {label}</a>', unsafe_allow_html=True)
-    elif not links:
+    if not links or not any(str(v).startswith("http") for v in links.values()):
         st.markdown('<div class="alert al-wn" style="font-size:.82rem;">⚠️ لا توجد وثائق مرفوعة لهذا المترشح.</div>', unsafe_allow_html=True)
     st.markdown("---")
 
