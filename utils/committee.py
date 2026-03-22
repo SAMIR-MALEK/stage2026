@@ -53,6 +53,46 @@ SILKS = [
 ]
 
 
+
+CRITERIA_DOCS = {
+    "نقاط الرتبة":          ["tr_rank","rank_doc","sc_rank","rs_rank"],
+    "الرتبة":               ["tr_rank","rank_doc","sc_rank"],
+    "الاستفادات":           [],
+    "التسجيل":              ["tr_reg_doc"],
+    "الجوائز":              ["tr_award_doc"],
+    "مقال":                 ["tr_art_pdf_0","tr_art_pdf_1","tr_art_pdf_2"],
+    "مداخلة":               ["tr_int_cert_0","tr_int_cert_1","tr_int_cert_2"],
+    "براءة":                ["tr_pat_cert_0","tr_pat_cert_1"],
+    "مشروع":                ["tr_proj_cert_0","tr_proj_cert_1"],
+    "إشراف":                ["tr_sup_cert_0","tr_sup_cert_1"],
+    "دكتوراه":              ["tr_sup_cert_0","tr_sup_cert_1"],
+    "ماستر":                ["tr_master_doc_1","tr_master_doc_2"],
+    "ليسانس":               ["tr_lic_doc_1"],
+    "جذع":                  ["tr_shared_doc_1"],
+    "منصب":                 ["high_doc"],
+    "تعهد التأهيل":         ["taheel_doc"],
+    "استمارة":              ["adm_f1_istimara","adm_f2_istimara","adm_f3_istimara","adm_f4_istimara"],
+    "مشروع العمل":          ["adm_f1_mashrou3","adm_f2_mashrou3","adm_f3_mashrou3","adm_f4_mashrou3"],
+    "التعهد":               ["adm_f1_ta3ahod","adm_f2_ta3ahod","adm_f3_ta3ahod","adm_f4_ta3ahod"],
+    "التصريح":              ["adm_f3_tasrih"],
+}
+
+def _find_doc_link(label: str, all_links: dict) -> str:
+    label_lower = label.lower()
+    for keyword, doc_keys in CRITERIA_DOCS.items():
+        if keyword in label_lower:
+            for dk in doc_keys:
+                if dk in all_links and str(all_links[dk]).startswith("http"):
+                    return all_links[dk]
+    # بحث مباشر في المفاتيح
+    for dk, link in all_links.items():
+        if str(link).startswith("http"):
+            dk_clean = dk.replace("_"," ").replace("0","").replace("1","").strip()
+            if any(w in label_lower for w in dk_clean.split()):
+                return link
+    return ""
+
+
 def _logout():
     for k in list(st.session_state.keys()): del st.session_state[k]
     st.rerun()
@@ -164,12 +204,13 @@ def _review_card(row):
     links     = _parse(row["روابط_الوثائق"])
     breakdown = _parse(row["تفصيل_النقاط"])
 
-    # الوثائق
-    if links:
-        st.markdown("**📎 وثائق المترشح:**")
+    # الوثائق الإدارية (خارج جدول التنقيط)
+    admin_keys = [k for k in links if k.startswith("adm_")]
+    if admin_keys:
+        st.markdown("**📋 الوثائق الإدارية:**")
         cols = st.columns(4)
-        ci = 0
-        for dk, link in links.items():
+        for ci, dk in enumerate(admin_keys):
+            link = links.get(dk,"")
             if link and str(link).startswith("http"):
                 label = LABEL_MAP.get(dk, dk.replace("_"," "))
                 with cols[ci % 4]:
@@ -178,7 +219,6 @@ def _review_card(row):
                         f'background:#f0f4fa;border:1px solid #dce3ee;border-radius:6px;'
                         f'font-size:.78rem;color:#1a3a5c;text-decoration:none;margin-bottom:5px;">'
                         f'🔗 {label}</a>', unsafe_allow_html=True)
-                ci += 1
         st.markdown("---")
 
     # تعديل النقاط
@@ -186,26 +226,38 @@ def _review_card(row):
     new_scores = {}
 
     if breakdown:
+        # رأس الجدول
+        h1,h2,h3,h4 = st.columns([2.5, 0.8, 1, 1.2])
+        with h1: st.markdown('<div style="font-size:.78rem;font-weight:600;color:#6b7f96;padding:4px 0;">المعيار</div>', unsafe_allow_html=True)
+        with h2: st.markdown('<div style="font-size:.78rem;font-weight:600;color:#6b7f96;text-align:center;">أولية</div>', unsafe_allow_html=True)
+        with h3: st.markdown('<div style="font-size:.78rem;font-weight:600;color:#6b7f96;text-align:center;">وثيقة</div>', unsafe_allow_html=True)
+        with h4: st.markdown('<div style="font-size:.78rem;font-weight:600;color:#6b7f96;text-align:center;">نهائية</div>', unsafe_allow_html=True)
+        st.markdown('<div style="border-bottom:2px solid #1a3a5c;margin-bottom:4px;"></div>', unsafe_allow_html=True)
+
         for label, pts in breakdown.items():
-            c1, c2, c3 = st.columns([3, 1, 1.5])
+            c1, c2, c3, c4 = st.columns([2.5, 0.8, 1, 1.2])
             with c1:
-                st.markdown(f'<div style="padding:4px 0;font-size:.9rem;">{label}</div>',
-                            unsafe_allow_html=True)
+                st.markdown(f'<div style="padding:5px 0;font-size:.88rem;">{label}</div>', unsafe_allow_html=True)
             with c2:
                 if pts is None:
                     orig = 0.0
-                    st.markdown('<div style="text-align:center;color:#c8973a;font-size:.9rem;">⏳</div>',
-                                unsafe_allow_html=True)
+                    st.markdown('<div style="text-align:center;color:#c8973a;">⏳</div>', unsafe_allow_html=True)
                 else:
                     try:
                         orig = float(pts)
                         col  = "#e74c3c" if orig < 0 else "#27ae60"
-                        st.markdown(
-                            f'<div style="text-align:center;font-weight:700;color:{col};font-size:.9rem;">{orig:+.1f}</div>',
-                            unsafe_allow_html=True)
+                        st.markdown(f'<div style="text-align:center;font-weight:700;color:{col};">{orig:+.1f}</div>', unsafe_allow_html=True)
                     except:
                         orig = 0.0
             with c3:
+                doc_link = _find_doc_link(label, links)
+                if doc_link:
+                    st.markdown(
+                        f'<a href="{doc_link}" target="_blank" style="display:block;text-align:center;padding:3px 6px;background:#e6f1fb;border-radius:4px;font-size:.78rem;color:#185fa5;text-decoration:none;">🔗 فتح</a>',
+                        unsafe_allow_html=True)
+                else:
+                    st.markdown('<div style="text-align:center;color:#ccc;font-size:.78rem;">—</div>', unsafe_allow_html=True)
+            with c4:
                 new_val = st.number_input(
                     "ن", min_value=-50.0, max_value=100.0,
                     value=float(orig), step=0.5,
@@ -213,8 +265,7 @@ def _review_card(row):
                     label_visibility="collapsed"
                 )
             new_scores[label] = new_val
-            st.markdown('<div style="border-bottom:.5px solid #f0f0f0;"></div>',
-                        unsafe_allow_html=True)
+            st.markdown('<div style="border-bottom:.5px solid #f0f0f0;margin:.1rem 0;"></div>', unsafe_allow_html=True)
     else:
         st.markdown('<div class="alert al-wn" style="font-size:.82rem;">لا يوجد تفصيل — أدخل النقطة الكلية مباشرة.</div>',
                     unsafe_allow_html=True)
