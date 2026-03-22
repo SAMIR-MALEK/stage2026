@@ -250,6 +250,11 @@ def show_committee():
                     unsafe_allow_html=True)
         return
 
+    # تشخيص قيم عمود السلك
+    silk_vals = df["السلك"].value_counts().to_dict()
+    if all(v in ("","nan","None") for v in df["السلك"].tolist()):
+        st.markdown(f'<div class="alert al-wn">⚠️ عمود السلك فارغ في الشيت — الملفات ستظهر في الصيغة 1 مؤقتاً. القيم الموجودة: {silk_vals}</div>', unsafe_allow_html=True)
+
     # إحصائيات
     c1,c2,c3,c4 = st.columns(4)
     for col,(val,color,label) in zip([c1,c2,c3,c4],[
@@ -270,12 +275,23 @@ def show_committee():
 
     for tab, (tab_name, silk_val) in zip(tabs[:-1], SILKS):
         with tab:
+            # فلتر السلك — مع دعم الأعمدة الفارغة
             silk_df = df[df["السلك"]==silk_val].copy()
-
+            
+            # إذا كان عمود السلك فارغاً، نستخدم عمود الصيغة كبديل
             if silk_df.empty:
-                st.markdown('<div class="alert al-in">📭 لا توجد ملفات لهذه الصيغة.</div>',
-                            unsafe_allow_html=True)
-                continue
+                silk_df = df[df["الصيغة"].str.contains(silk_val, na=False)].copy()
+            
+            # إذا لا يزال فارغاً، نعرض كل الملفات مع تنبيه
+            if silk_df.empty:
+                # فحص إذا كانت هناك ملفات بدون سلك محدد
+                unassigned = df[df["السلك"].isin(["","nan","None"]) | df["السلك"].isna()]
+                if not unassigned.empty and tab_name == "صيغة 1 — أساتذة محاضرون":
+                    st.markdown('<div class="alert al-wn">⚠️ بعض الملفات غير مصنّفة بسلك — تظهر هنا مؤقتاً.</div>', unsafe_allow_html=True)
+                    silk_df = unassigned.copy()
+                else:
+                    st.markdown('<div class="alert al-in">📭 لا توجد ملفات لهذه الصيغة.</div>', unsafe_allow_html=True)
+                    continue
 
             st.markdown(f"**{len(silk_df)} ملف مقدَّم**")
 
@@ -314,13 +330,20 @@ def show_committee():
                 from openpyxl.styles import Font, PatternFill, Alignment
                 from openpyxl.utils import get_column_letter
                 wb = openpyxl.Workbook()
-                wb.remove(wb.active)
+                # لا نحذف الورقة الأولى — نسمّيها
+                wb.active.title = "الكل"
                 STATUS_FILL = {"مقبول":"E8F8F0","مرفوض":"FDECEA",
                                "قائمة انتظار":"E6F1FB","قيد المراجعة":"FEF9EC"}
+                first = True
                 for tab_name, silk_val in SILKS:
                     silk_ex = ex[ex["السلك"]==silk_val][show]
                     if silk_ex.empty: continue
-                    ws = wb.create_sheet(title=silk_val[:31])
+                    if first:
+                        ws = wb.active
+                        ws.title = silk_val[:31]
+                        first = False
+                    else:
+                        ws = wb.create_sheet(title=silk_val[:31])
                     for ci, h in enumerate(show, 1):
                         c = ws.cell(1, ci, h)
                         c.font = Font(bold=True,color="FFFFFF",name="Arial")
