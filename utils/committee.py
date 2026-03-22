@@ -54,42 +54,67 @@ SILKS = [
 
 
 
-CRITERIA_DOCS = {
-    "نقاط الرتبة":          ["tr_rank","rank_doc","sc_rank","rs_rank"],
-    "الرتبة":               ["tr_rank","rank_doc","sc_rank"],
-    "الاستفادات":           [],
-    "التسجيل":              ["tr_reg_doc"],
-    "الجوائز":              ["tr_award_doc"],
-    "مقال":                 ["tr_art_pdf_0","tr_art_pdf_1","tr_art_pdf_2"],
-    "مداخلة":               ["tr_int_cert_0","tr_int_cert_1","tr_int_cert_2"],
-    "براءة":                ["tr_pat_cert_0","tr_pat_cert_1"],
-    "مشروع":                ["tr_proj_cert_0","tr_proj_cert_1"],
-    "إشراف":                ["tr_sup_cert_0","tr_sup_cert_1"],
-    "دكتوراه":              ["tr_sup_cert_0","tr_sup_cert_1"],
-    "ماستر":                ["tr_master_doc_1","tr_master_doc_2"],
-    "ليسانس":               ["tr_lic_doc_1"],
-    "جذع":                  ["tr_shared_doc_1"],
-    "منصب":                 ["high_doc"],
-    "تعهد التأهيل":         ["taheel_doc"],
-    "استمارة":              ["adm_f1_istimara","adm_f2_istimara","adm_f3_istimara","adm_f4_istimara"],
-    "مشروع العمل":          ["adm_f1_mashrou3","adm_f2_mashrou3","adm_f3_mashrou3","adm_f4_mashrou3"],
-    "التعهد":               ["adm_f1_ta3ahod","adm_f2_ta3ahod","adm_f3_ta3ahod","adm_f4_ta3ahod"],
-    "التصريح":              ["adm_f3_tasrih"],
+# كلمات مفتاحية للبحث عن الوثيقة المناسبة لكل معيار
+CRITERIA_KEYWORDS = {
+    "نقاط الرتبة":  ["rank_doc","tr_rank","sc_rank","rs_rank"],
+    "الرتبة":       ["rank_doc","tr_rank","sc_rank","rs_rank"],
+    "الأقدمية":     ["sen_doc"],
+    "اللغات":       ["lang_doc","eng_doc"],
+    "لغة":          ["lang_doc","eng_doc"],
+    "إنجليزي":      ["eng_doc"],
+    "الاستفادات":   [],
+    "التسجيل":      ["tr_reg_doc","rs_phd_doc"],
+    "الجوائز":      ["tr_award_doc","rs_award_doc"],
+    "مقال":         ["tr_art_pdf_0","tr_art_pdf_1","sc_art_pdf_0","rs_art_pdf_0"],
+    "مداخلة":       ["tr_int_cert_0","tr_int_cert_1","sc_int_cert_0","rs_int_cert_0"],
+    "براءة":        ["tr_pat_cert_0","sc_pat_cert_0","rs_pat_cert_0"],
+    "مشروع":        ["tr_proj_cert_0","sc_proj_cert_0","rs_proj_cert_0"],
+    "إشراف":        ["tr_sup_cert_0","tr_sup_cert_1"],
+    "دكتوراه":      ["tr_sup_cert_0","rs_phd_doc"],
+    "ماستر":        ["tr_master_doc_1"],
+    "ليسانس":       ["tr_lic_doc_1"],
+    "جذع مشترك":    ["tr_shared_doc_1"],
+    "جذع":          ["tr_shared_doc_1"],
+    "منصب":         ["high_doc"],
+    "تعهد التأهيل": ["taheel_doc"],
+    "وزاري":        ["min_doc"],
+    "هيئات":        ["body_cert_0","body_cert_1"],
+    "دولي":         ["iproj_cert_0"],
+    "دراسة":        ["sc_natl_cert_0","sc_intl_cert_0","rs_natl_cert_0","rs_intl_cert_0"],
+    "قرار":         ["sc_law_cert_0"],
+    "استمارة":      ["adm_f1_istimara","adm_f2_istimara","adm_f3_istimara","adm_f4_istimara"],
+    "مشروع العمل":  ["adm_f1_mashrou3","adm_f2_mashrou3","adm_f3_mashrou3","adm_f4_mashrou3"],
+    "التعهد":       ["adm_f1_ta3ahod","adm_f2_ta3ahod","adm_f3_ta3ahod","adm_f4_ta3ahod"],
+    "تصريح":        ["adm_f3_tasrih"],
 }
 
 def _find_doc_link(label: str, all_links: dict) -> str:
-    label_lower = label.lower()
-    for keyword, doc_keys in CRITERIA_DOCS.items():
-        if keyword in label_lower:
+    """إيجاد رابط الوثيقة المناسبة للمعيار"""
+    if not all_links:
+        return ""
+    
+    # بحث بالكلمات المفتاحية
+    for keyword, doc_keys in CRITERIA_KEYWORDS.items():
+        if keyword in label:
             for dk in doc_keys:
-                if dk in all_links and str(all_links[dk]).startswith("http"):
-                    return all_links[dk]
-    # بحث مباشر في المفاتيح
+                link = all_links.get(dk,"")
+                if link and str(link).startswith("http"):
+                    return link
+    
+    # بحث مباشر — قارن اسم المعيار مع الاسم الواضح للوثيقة
     for dk, link in all_links.items():
-        if str(link).startswith("http"):
-            dk_clean = dk.replace("_"," ").replace("0","").replace("1","").strip()
-            if any(w in label_lower for w in dk_clean.split()):
-                return link
+        if not link or not str(link).startswith("http"):
+            continue
+        readable = _get_label(dk)
+        # إذا تشابه الاسم الواضح مع المعيار
+        label_words = set(label.replace("①","").replace("②","").replace("③","")
+                         .replace("④","").replace("⑤","").replace("⑥","")
+                         .replace("⑦","").replace("⑧","").replace("⑨","")
+                         .replace("⑩","").replace("⑪","").replace("⑫","").strip().split())
+        readable_words = set(readable.split())
+        if len(label_words & readable_words) >= 1 and len(label_words) > 0:
+            return link
+    
     return ""
 
 
