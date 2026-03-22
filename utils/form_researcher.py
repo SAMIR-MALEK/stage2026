@@ -73,7 +73,7 @@ def show_form():
         key="rank_pts_input",
         help="هذه النقطة ستؤكدها اللجنة بعد مراجعة وثيقة الترقية"
     )
-    rank_doc_ok = smart_upload("وثيقة إثبات الرتبة (آخر ترقية)", "rank_doc", required=True)
+    rank_ok = smart_upload("وثيقة إثبات الرتبة (آخر ترقية)", "rank_doc", required=True)
     st.markdown(f'<div class="alert al-wn" style="font-size:.85rem;">نقاط رتبتك المبدئية: <strong>{rank_pts_default:.1f}</strong> — ستؤكدها اللجنة بعد مراجعة الوثيقة.</div>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
     scores["① نقاط الرتبة"] = rank_pts_input
